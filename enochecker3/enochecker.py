@@ -22,6 +22,7 @@ from typing import (
 
 import httpx
 import pymongo
+import uvicorn
 from fastapi import FastAPI
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -294,7 +295,9 @@ class Enochecker:
         self._dependency_injections[sig.return_annotation] = f
 
     def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
-        return httpx.AsyncClient(base_url=f"http://{task.address}:{self.service_port}")
+        return httpx.AsyncClient(
+            base_url=f"http://{task.address}:{self.service_port}", verify=False
+        )
 
     def _get_chaindb(self, task: BaseCheckerTaskMessage) -> ChainDB:
         return ChainDB(self._chain_collection, task.task_chain_id)
@@ -467,3 +470,6 @@ class Enochecker:
         app.on_event("startup")(self._init)
 
         return app
+
+    def run(self, port: Optional[int] = None) -> None:
+        uvicorn.run(self.app, host="127.0.0.1", port=port or 8000)
