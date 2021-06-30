@@ -64,7 +64,7 @@ METHOD_TO_TASK_MESSAGE_MAPPING = {
 TIMEOUT_BUFFER = 2
 
 
-AsyncSocket = Tuple[asyncio.StreamReader, asyncio.StreamWriter]
+AsyncSocket = AsyncIterator[Tuple[asyncio.StreamReader, asyncio.StreamWriter]]
 
 
 class EnocheckerException(Exception):
@@ -325,9 +325,7 @@ class Enochecker:
         )
 
     @contextlib.asynccontextmanager
-    async def _get_async_socket(
-        self, task: BaseCheckerTaskMessage
-    ) -> AsyncIterator[AsyncSocket]:
+    async def _get_async_socket(self, task: BaseCheckerTaskMessage) -> AsyncSocket:
         try:
             conn = await asyncio.streams.open_connection(
                 task.address, self.service_port
