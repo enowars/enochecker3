@@ -71,8 +71,8 @@ Start the checker using
 uvicorn --reload example:checker.app
 ```
 
-And browse to [http://localhost:8000/docs] to explore the web interface, which allows you to send requests to the checker.
+And browse to (http://localhost:8000/docs) to explore the web interface, which allows you to send requests to the checker.
 
 ## Documentation
 
-You can check out the full tutorial at [https://enowars.github.io/docs]
+You can check out the full tutorial at (https://enowars.github.io/docs)
