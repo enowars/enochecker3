@@ -2,6 +2,7 @@ from .chaindb import ChainDB
 from .enochecker import (
     AsyncSocket,
     CircularDependencyException,
+    DependencyInjector,
     Enochecker,
     EnocheckerException,
     InvalidVariantIdsException,
