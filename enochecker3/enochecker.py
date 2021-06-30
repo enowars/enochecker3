@@ -184,39 +184,52 @@ class Enochecker:
         )
 
     def _define_method(
-        self, variant_id: int, method: CheckerMethod
+        self,
+        method: CheckerMethod,
+        *variant_ids: int,
     ) -> Callable[[Callable[..., Any]], None]:
-        if variant_id < 0:
+        if not variant_ids:
             raise InvalidVariantIdsException(
-                f"variant_id {variant_id} must not be negative"
-            )
-        if variant_id in self._method_variants[method]:
-            raise InvalidVariantIdsException(
-                f"variant_id {variant_id} already defined for method {method}"
+                "Must specify at least one variant_id for a method"
             )
 
+        if len(variant_ids) != len(set(variant_ids)):
+            raise InvalidVariantIdsException("variant_id must be unique")
+
+        for variant_id in variant_ids:
+            if variant_id < 0:
+                raise InvalidVariantIdsException(
+                    f"variant_id {variant_id} must not be negative"
+                )
+
+            if variant_id in self._method_variants[method]:
+                raise InvalidVariantIdsException(
+                    f"variant_id {variant_id} already defined for method {method}"
+                )
+
         def wrapper(f: Callable[..., Any]) -> None:
-            self._method_variants[method][variant_id] = f
+            for variant_id in variant_ids:
+                self._method_variants[method][variant_id] = f
 
         return wrapper
 
-    def putflag(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.PUTFLAG)
+    def putflag(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.PUTFLAG, *variant_ids)
 
-    def getflag(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.GETFLAG)
+    def getflag(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.GETFLAG, *variant_ids)
 
-    def putnoise(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.PUTNOISE)
+    def putnoise(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.PUTNOISE, *variant_ids)
 
-    def getnoise(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.GETNOISE)
+    def getnoise(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.GETNOISE, *variant_ids)
 
-    def havoc(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.HAVOC)
+    def havoc(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.HAVOC, *variant_ids)
 
-    def exploit(self, variant_id: int) -> Callable[[Callable[..., Any]], None]:
-        return self._define_method(variant_id, CheckerMethod.EXPLOIT)
+    def exploit(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.EXPLOIT, *variant_ids)
 
     @asynccontextmanager
     async def _inject_dependencies(
