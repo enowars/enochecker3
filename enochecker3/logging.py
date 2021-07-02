@@ -42,23 +42,13 @@ class ELKFormatter(logging.Formatter):
             module=record.module,
             function=record.funcName,
             service_name=checker_name,
-            task_id=getattr(checker_task, "task_id", None) if checker_task else None,
-            method=getattr(checker_task, "method", None) if checker_task else None,
-            team_id=getattr(checker_task, "team_id", None) if checker_task else None,
-            team_name=getattr(checker_task, "team_name", None)
-            if checker_task
-            else None,
-            current_round_id=getattr(checker_task, "current_round_id", None)
-            if checker_task
-            else None,
-            related_round_id=getattr(checker_task, "related_round_id", None)
-            if checker_task
-            else None,
-            flag=getattr(checker_task, "flag", None) if checker_task else None,
-            variant_id=getattr(checker_task, "variant_id", None)
-            if checker_task
-            else None,
-            task_chain_id=getattr(checker_task, "task_chain_id", None)
-            if checker_task
-            else None,
+            task_id=getattr(checker_task, "task_id", None),
+            method=getattr(checker_task, "method", None),
+            team_id=getattr(checker_task, "team_id", None),
+            team_name=getattr(checker_task, "team_name", None),
+            current_round_id=getattr(checker_task, "current_round_id", None),
+            related_round_id=getattr(checker_task, "related_round_id", None),
+            flag=getattr(checker_task, "flag", None),
+            variant_id=getattr(checker_task, "variant_id", None),
+            task_chain_id=getattr(checker_task, "task_chain_id", None),
         )
