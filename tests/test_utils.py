@@ -43,7 +43,7 @@ def test_search_flag(haystack):
 
     searcher = FlagSearcher(flag_regex, flag_hash)
 
-    assert searcher.search_flag(haystack) == "ENOabcdefgh="
+    assert searcher.search_flag(haystack) == b"ENOabcdefgh="
 
 
 @pytest.mark.parametrize("haystack", ["ENOstuvwxyz="])
