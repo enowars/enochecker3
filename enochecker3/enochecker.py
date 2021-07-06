@@ -518,7 +518,7 @@ class Enochecker:
             except Exception as e:
                 traceback.print_exc()
                 trace = traceback.format_exc()
-                logger = self._get_logger_adapter(task)
+                logger = self._get_logger_adapter(_task)
                 logger.critical(f"Encountered internal exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR,
