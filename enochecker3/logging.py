@@ -12,7 +12,7 @@ class ELKFormatter(logging.Formatter):
         if record.args is not None:
             record.msg = record.msg % record.args
 
-        return LOGGING_PREFIX + self.create_message(record).json()
+        return LOGGING_PREFIX + self.create_message(record).json(by_alias=True)
 
     def to_level(self, levelname: str) -> int:
         if levelname == "CRITICAL":
