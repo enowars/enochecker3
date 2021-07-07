@@ -276,7 +276,7 @@ class Enochecker:
                 new_args.append(await stack.enter_async_context(arg))
             yield new_args
 
-    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str]:
+    async def _call_method_raw(self, task: BaseCheckerTaskMessage) -> Optional[str]:
         variant_id = task.variant_id
         method = task.method
         try:
@@ -287,9 +287,26 @@ class Enochecker:
             )
 
         async with self._inject_dependencies(task, f) as args:
+            return await f(*args)
+
+    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str]:
+        try:
             return await asyncio.wait_for(
-                f(*args), timeout=(task.timeout / 1000) - TIMEOUT_BUFFER
+                self._call_method_raw(task),
+                timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
+        except asyncio.exceptions.TimeoutError:
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.error(f"Checker task timed out\n{trace}")
+            raise MumbleException(
+                "Service responding too slow, allowed time for checker task exceeded"
+            )
+        except (httpx.ConnectTimeout, httpx.ConnectError):
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.info(f"Failed to connect to service\n{trace}")
+            raise OfflineException("Could not establish HTTP connection to service")
 
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
@@ -377,13 +394,17 @@ class Enochecker:
         )
 
     @contextlib.asynccontextmanager
-    async def _get_async_socket(self, task: BaseCheckerTaskMessage) -> AsyncSocket:
+    async def _get_async_socket(
+        self, task: BaseCheckerTaskMessage, logger: logging.LoggerAdapter
+    ) -> AsyncSocket:
         try:
             conn = await asyncio.streams.open_connection(
                 task.address, self.service_port
             )
-        except ConnectionError:
-            raise OfflineException("Establishing socket connection to service failed")
+        except (ConnectionError, asyncio.exceptions.TimeoutError):
+            trace = traceback.format_exc()
+            logger.info(f"Failed to connect to service\n{trace}")
+            raise OfflineException("Could not establish socket connection to service")
         try:
             yield conn
         finally:
@@ -472,6 +493,8 @@ class Enochecker:
         async def checker(task: CheckerTaskMessage) -> CheckerResultMessage:
             cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
             _task = cls(**task.dict())
+            logger = self._get_logger_adapter(_task)
+            logger.debug(f"Received new checker task with payload: {_task}")
             try:
                 if task.method == CheckerMethod.PUTFLAG:
                     return await self._call_putflag(
@@ -501,24 +524,26 @@ class Enochecker:
                         message=f"Unsupported method: {task.method}",
                     )
             except MumbleException as e:
-                traceback.print_exc()
+                trace = traceback.format_exc()
+                logger.info(f"Encountered mumble exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.MUMBLE, message=e.message
                 )
             except OfflineException as e:
-                traceback.print_exc()
+                trace = traceback.format_exc()
+                logger.info(f"Encountered offline exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.OFFLINE, message=e.message
                 )
             except InternalErrorException as e:
-                traceback.print_exc()
+                trace = traceback.format_exc()
+                logger.info(f"Encountered explicit internal error exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
                 )
             except Exception as e:
                 traceback.print_exc()
                 trace = traceback.format_exc()
-                logger = self._get_logger_adapter(_task)
                 logger.critical(f"Encountered internal exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR,
