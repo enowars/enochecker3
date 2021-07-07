@@ -295,7 +295,7 @@ class Enochecker:
                 self._call_method_raw(task),
                 timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
-        except asyncio.exceptions.TimeoutError:
+        except asyncio.TimeoutError:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.error(f"Checker task timed out\n{trace}")
@@ -401,7 +401,7 @@ class Enochecker:
             conn = await asyncio.streams.open_connection(
                 task.address, self.service_port
             )
-        except (ConnectionError, asyncio.exceptions.TimeoutError):
+        except (ConnectionError, asyncio.TimeoutError):
             trace = traceback.format_exc()
             logger.info(f"Failed to connect to service\n{trace}")
             raise OfflineException("Could not establish socket connection to service")
