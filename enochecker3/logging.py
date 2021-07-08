@@ -9,7 +9,7 @@ LOGGING_PREFIX = "##ENOLOGMESSAGE "
 
 class ELKFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        if record.args is not None:
+        if type(record.args) is tuple and len(record.args) > 0:
             record.msg = record.msg % record.args
 
         return LOGGING_PREFIX + self.create_message(record).json(by_alias=True)
