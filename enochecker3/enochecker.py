@@ -295,6 +295,8 @@ class Enochecker:
                 self._call_method_raw(task),
                 timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
+        except asyncio.IncompleteReadError:
+            raise MumbleException("Service connection closed abruptly")
         except asyncio.TimeoutError:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
