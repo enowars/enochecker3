@@ -107,10 +107,9 @@ class DependencyInjector:
         args = await self._exit_stack.enter_async_context(
             self.checker._inject_dependencies(self.task, injector, None)
         )
-        if isawaitable(injector):
-            res = await injector(*args)
-        else:
-            res = injector(*args)
+        res = injector(*args)
+        if isawaitable(res):
+            res = await res
 
         if not hasattr(res, "__enter__") and not hasattr(res, "__aenter__"):
             return res
@@ -261,10 +260,10 @@ class Enochecker:
                 async with self._inject_dependencies(
                     task, injector, dependencies.union([v.annotation])
                 ) as args_:
-                    if isawaitable(injector):
-                        args.append(await injector(*args_))
-                    else:
-                        args.append(injector(*args_))
+                    arg = injector(*args_)
+                    if isawaitable(arg):
+                        arg = await arg
+                    args.append(arg)
 
         async with AsyncExitStack() as stack:
             # new_args contains the return values of __(a)enter__, which would be the "x" in "(async) with ... as x:"
