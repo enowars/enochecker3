@@ -391,6 +391,7 @@ class Enochecker:
         return logging.LoggerAdapter(
             self._logger,
             extra={
+                "service_name": self.service_name,
                 "checker_name": self.checker_name,
                 "checker_task": task,
             },

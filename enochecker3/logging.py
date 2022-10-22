@@ -31,9 +31,10 @@ class ELKFormatter(logging.Formatter):
         checker_task: Optional[CheckerTaskMessage] = getattr(
             record, "checker_task", None
         )
+        service_name: Optional[str] = getattr(record, "service_name", None)
         checker_name: Optional[str] = getattr(record, "checker_name", None)
         return EnoLogMessage(
-            tool="enochecker3",
+            tool=checker_name,
             type="infrastructure",
             severity=record.levelname,
             severity_level=self.to_level(record.levelname),
@@ -41,7 +42,7 @@ class ELKFormatter(logging.Formatter):
             message=record.msg,
             module=record.module,
             function=record.funcName,
-            service_name=checker_name,
+            service_name=service_name,
             task_id=getattr(checker_task, "task_id", None),
             method=getattr(checker_task, "method", None),
             team_id=getattr(checker_task, "team_id", None),
