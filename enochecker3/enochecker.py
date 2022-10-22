@@ -121,6 +121,8 @@ class Enochecker:
         self.service_name: str = service_name
         self.service_port: int = service_port
 
+        self.checker_name: str = service_name + "Checker"
+
         self._dependency_injections: Dict[type, Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
         handler = logging.StreamHandler(sys.stdout)
@@ -172,7 +174,7 @@ class Enochecker:
             connection_string = f"mongodb://{mongo_host}:{mongo_port}"
 
         self._mongo: AsyncIOMotorClient = AsyncIOMotorClient(connection_string)
-        self._mongodb: AsyncIOMotorDatabase = self._mongo[self.service_name]
+        self._mongodb: AsyncIOMotorDatabase = self._mongo[self.checker_name]
 
         self._chain_collection: AsyncIOMotorCollection = self._mongodb["chain_db"]
 
@@ -389,7 +391,7 @@ class Enochecker:
         return logging.LoggerAdapter(
             self._logger,
             extra={
-                "checker_name": self.service_name + "Checker",
+                "checker_name": self.checker_name,
                 "checker_task": task,
             },
         )
