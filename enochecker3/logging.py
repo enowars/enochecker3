@@ -12,7 +12,14 @@ class ELKFormatter(logging.Formatter):
         if type(record.args) is tuple and len(record.args) > 0:
             record.msg = record.msg % record.args
 
-        return LOGGING_PREFIX + self.create_message(record).json(by_alias=True)
+        msg: EnoLogMessage = self.create_message(record)
+        message_size: int = len(msg.message.encode())
+        if message_size > 32766:
+            suffix: str = "... <SNIP>"
+            trunc: int = message_size + len(suffix) - 32766
+            msg.message = msg.message[:-trunc] + suffix
+
+        return LOGGING_PREFIX + msg.json(by_alias=True)
 
     def to_level(self, levelname: str) -> int:
         if levelname == "CRITICAL":
