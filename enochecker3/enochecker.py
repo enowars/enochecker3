@@ -135,14 +135,14 @@ class Enochecker:
         )
         """
 
-        self.register_dependency(self._get_http_client)
-        self.register_dependency(self._get_chaindb)
-        self.register_dependency(self._get_motor_collection)
-        self.register_dependency(self._get_motor_database)
-        self.register_dependency(self._get_flag_searcher)
-        self.register_dependency(self._get_logger_adapter)
-        self.register_dependency(self._get_async_socket)
-        self.register_dependency(self._get_dependency_injector)
+        self.register_dependency("client")(self._get_http_client)
+        self.register_dependency("chaindb")(self._get_chaindb)
+        self.register_dependency("motor_collection")(self._get_motor_collection)
+        self.register_dependency("motor_db")(self._get_motor_database)
+        self.register_dependency("searcher")(self._get_flag_searcher)
+        self.register_dependency("logger")(self._get_logger_adapter)
+        self.register_dependency("socket")(self._get_async_socket)
+        self.register_dependency("injector")(self._get_dependency_injector)
 
         self._method_variants: Dict[CheckerMethod, Dict[int, Callable[..., Any]]] = {
             CheckerMethod.PUTFLAG: {},
@@ -249,16 +249,17 @@ class Enochecker:
             except TypeError:
                 # subscripted generics, e.g. AsyncSocket = Tuple[..., ...], cannot be used in issubclass
                 subclass = False
+            key: Tuple[str, object] = (v.name, v.annotation)
             if subclass:
                 args.append(task)
-            elif v.annotation in dependencies:
+            elif key in dependencies:
                 raise CircularDependencyException(
                     f"detected circular dependency in {f} with injected type {v.annotation}"
                 )
             else:
-                injector = self._dependency_injections[v.annotation]
+                injector = self._dependency_injections[key]
                 async with self._inject_dependencies(
-                    task, injector, dependencies.union([v.annotation])
+                    task, injector, dependencies.union([key])
                 ) as args_:
                     arg = injector(*args_)
                     if isawaitable(arg):
@@ -353,16 +354,20 @@ class Enochecker:
     # Dependency Injection #
     ########################
 
-    def register_dependency(self, f: Callable[..., Any]) -> None:
-        sig = signature(f)
-        if sig.return_annotation == Parameter.empty:
-            raise AttributeError(f"missing return annotation for {f.__name__}")
-        if sig.return_annotation in self._dependency_injections:
-            raise ValueError(
-                f"already registered a dependency with return type {sig.return_annotation}"
-            )
+    def register_dependency(self, name: str) -> None:
+        def decorator(f: Callable[..., Any]):
+            sig = signature(f)
+            key: Tuple[str, object] = (name, sig.return_annotation)
+            if sig.return_annotation == Parameter.empty:
+                raise AttributeError(f"missing return annotation for {f.__name__}")
+            if key in self._dependency_injections:
+                raise ValueError(
+                    f"already registered a dependency with return type {sig.return_annotation}"
+                )
 
-        self._dependency_injections[sig.return_annotation] = f
+            self._dependency_injections[key] = f
+
+        return decorator
 
     def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
         return httpx.AsyncClient(
