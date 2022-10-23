@@ -1,10 +1,32 @@
 import datetime
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from .types import CheckerTaskMessage, EnoLogMessage
 
 LOGGING_PREFIX = "##ENOLOGMESSAGE "
+
+
+class DebugFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        if type(record.args) is tuple and len(record.args) > 0:
+            record.msg = record.msg % record.args
+
+        checker_task: Optional[CheckerTaskMessage] = getattr(
+            record, "checker_task", None
+        )
+
+        timestamp: str = datetime.datetime.utcnow().strftime("%H:%M:%S.%f")[:-3]
+        method: str = getattr(checker_task, "method", None) or "<method>"
+        levelname: str = getattr(record, "levelname", None) or "<level>"
+        task_id: str = getattr(checker_task, "task_id", None) or "<taskid>"
+        prefix: str = "{} {} {} {} : ".format(timestamp, levelname, method, task_id)
+
+        log_lines: List[str] = []
+        for line in record.msg.strip().split("\n"):
+            log_lines.append(prefix + line)
+
+        return "\n".join(log_lines)
 
 
 class ELKFormatter(logging.Formatter):

@@ -32,7 +32,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 
-from enochecker3.logging import ELKFormatter
+from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
 
 from .chaindb import ChainDB
@@ -123,17 +123,20 @@ class Enochecker:
 
         self._dependency_injections: Dict[type, Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
+
         handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(ELKFormatter("%(message)s"))
+        if os.getenv("LOG_FORMAT") == "DEBUG":
+            handler.setFormatter(DebugFormatter("%(message)s"))
+        else:
+            handler.setFormatter(ELKFormatter("%(message)s"))
+
         self._logger.addHandler(handler)
         self._logger.setLevel(logging.DEBUG)
 
-        """
-        self._logger = logging.getLogger("uvicorn")
-        self._logger.setLevel(
-            logging.getLogger("uvicorn.access").getEffectiveLevel()
-        )
-        """
+        if __name__ == "uvicorn":
+            self._logger.setLevel(
+                logging.getLogger("uvicorn.access").getEffectiveLevel()
+            )
 
         self.register_dependency(self._get_http_client)
         self.register_dependency(self._get_chaindb)
