@@ -295,19 +295,20 @@ class Enochecker:
                 timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
         except asyncio.IncompleteReadError:
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.error(f"Service connection closed abruptly\n{trace}")
             raise MumbleException("Service connection closed abruptly")
         except asyncio.TimeoutError:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.error(f"Checker task timed out\n{trace}")
-            raise MumbleException(
-                "Service responding too slow, allowed time for checker task exceeded"
-            )
-        except (httpx.ConnectTimeout, httpx.ConnectError):
+            logger.error(f"Service is responding too slow\n{trace}")
+            raise MumbleException("Service is responding too slow")
+        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.info(f"Failed to connect to service\n{trace}")
-            raise OfflineException("Could not establish HTTP connection to service")
+            logger.info(f"HTTP connection to service failed\n{trace}")
+            raise OfflineException("HTTP connection to service failed")
 
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
