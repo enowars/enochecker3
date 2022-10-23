@@ -169,7 +169,7 @@ class Enochecker:
 
         if (mongo_user and not mongo_password) or (not mongo_user and mongo_password):
             raise ValueError(
-                "cannot set only MONGO_USER or MONGO_PASSWORD, must set none or both"
+                "Cannot set only MONGO_USER or MONGO_PASSWORD, must set none or both"
             )
 
         if mongo_user:
@@ -211,7 +211,7 @@ class Enochecker:
 
             if variant_id in self._method_variants[method]:
                 raise InvalidVariantIdsException(
-                    f"variant_id {variant_id} already defined for method {method}"
+                    f"Variant_id {variant_id} already defined for method {method}"
                 )
 
         def wrapper(f: Callable[..., Any]) -> None:
@@ -262,7 +262,7 @@ class Enochecker:
                 args.append(task)
             elif key in dependencies:
                 raise CircularDependencyException(
-                    f"detected circular dependency in {f} with injected type {v.annotation}"
+                    f"Detected circular dependency in {f} with injected type {v.annotation}"
                 )
             else:
                 injector = self._dependency_injections[key]
@@ -291,7 +291,7 @@ class Enochecker:
             f = self._method_variants[method][variant_id]
         except KeyError:
             raise AttributeError(
-                f"variant_id {variant_id} not defined for method {method}"
+                f"Variant_id {variant_id} not defined for method {method}"
             )
 
         async with self._inject_dependencies(task, f) as args:
@@ -441,14 +441,14 @@ class Enochecker:
         getflag_keys = self._method_variants[CheckerMethod.GETFLAG].keys()
         if putflag_keys != getflag_keys:
             raise InvalidVariantIdsException(
-                "mismatch between putflag and getflag variants"
+                "Mismatch between putflag and getflag variants"
             )
 
         putnoise_keys = self._method_variants[CheckerMethod.PUTNOISE].keys()
         getnoise_keys = self._method_variants[CheckerMethod.GETNOISE].keys()
         if putnoise_keys != getnoise_keys:
             raise InvalidVariantIdsException(
-                "mismatch between putnoise and getnoise variants"
+                "Mismatch between putnoise and getnoise variants"
             )
 
         for method in self._method_variants.keys():
