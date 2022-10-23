@@ -32,7 +32,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorDatabase,
 )
 
-from enochecker3.logging import ELKFormatter
+from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
 
 from .chaindb import ChainDB
@@ -120,23 +120,28 @@ class DependencyInjector:
 
 
 class Enochecker:
-    def __init__(self, name: str, service_port: int):
-        self.name: str = name
+    def __init__(self, service_name: str, service_port: int):
+        self.service_name: str = service_name
         self.service_port: int = service_port
+
+        self.checker_name: str = service_name + "Checker"
 
         self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
+
         handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(ELKFormatter("%(message)s"))
+        if os.getenv("LOG_FORMAT") == "DEBUG":
+            handler.setFormatter(DebugFormatter("%(message)s"))
+        else:
+            handler.setFormatter(ELKFormatter("%(message)s"))
+
         self._logger.addHandler(handler)
         self._logger.setLevel(logging.DEBUG)
 
-        """
-        self._logger = logging.getLogger("uvicorn")
-        self._logger.setLevel(
-            logging.getLogger("uvicorn.access").getEffectiveLevel()
-        )
-        """
+        if __name__ == "uvicorn":
+            self._logger.setLevel(
+                logging.getLogger("uvicorn.access").getEffectiveLevel()
+            )
 
         self.register_dependency("client")(self._get_http_client)
         self.register_dependency("chaindb")(self._get_chaindb)
@@ -175,7 +180,7 @@ class Enochecker:
             connection_string = f"mongodb://{mongo_host}:{mongo_port}"
 
         self._mongo: AsyncIOMotorClient = AsyncIOMotorClient(connection_string)
-        self._mongodb: AsyncIOMotorDatabase = self._mongo[self.name]
+        self._mongodb: AsyncIOMotorDatabase = self._mongo[self.checker_name]
 
         self._chain_collection: AsyncIOMotorCollection = self._mongodb["chain_db"]
 
@@ -299,19 +304,20 @@ class Enochecker:
                 timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
         except asyncio.IncompleteReadError:
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.error(f"Service connection closed abruptly\n{trace}")
             raise MumbleException("Service connection closed abruptly")
         except asyncio.TimeoutError:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.error(f"Checker task timed out\n{trace}")
-            raise MumbleException(
-                "Service responding too slow, allowed time for checker task exceeded"
-            )
-        except (httpx.ConnectTimeout, httpx.ConnectError):
+            logger.error(f"Service is responding too slow\n{trace}")
+            raise MumbleException("Service is responding too slow")
+        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.info(f"Failed to connect to service\n{trace}")
-            raise OfflineException("Could not establish HTTP connection to service")
+            logger.info(f"HTTP connection to service failed\n{trace}")
+            raise OfflineException("HTTP connection to service failed")
 
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
@@ -397,7 +403,8 @@ class Enochecker:
         return logging.LoggerAdapter(
             self._logger,
             extra={
-                "checker_name": self.name,
+                "service_name": self.service_name,
+                "checker_name": self.checker_name,
                 "checker_task": task,
             },
         )
@@ -471,7 +478,7 @@ class Enochecker:
         ) = self._validate_variant_ids()
 
         return CheckerInfoMessage(
-            service_name=self.name,
+            service_name=self.service_name,
             flag_variants=flag_variants,
             noise_variants=noise_variants,
             havoc_variants=havoc_variants,
