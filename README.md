@@ -25,7 +25,7 @@ from enochecker3 import (
 )
 from enochecker3.utils import FlagSearcher, assert_equals, assert_in
 
-checker = Enochecker("ExampleChecker", 1337)
+checker = Enochecker("ExampleService", 1337)
 
 
 @checker.putflag(0)
