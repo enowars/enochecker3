@@ -362,7 +362,7 @@ class Enochecker:
                 raise AttributeError(f"missing return annotation for {f.__name__}")
             if key in self._dependency_injections:
                 raise ValueError(
-                    f"already registered a dependency with return type {sig.return_annotation}"
+                    f"already registered a dependency with name {key[0]} and type {key[1]}"
                 )
 
             self._dependency_injections[key] = f
