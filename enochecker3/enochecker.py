@@ -99,11 +99,14 @@ class DependencyInjector:
     ) -> Optional[bool]:
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
-    async def get(self, t: type) -> Any:
-        if t not in self.checker._dependency_injections:
-            raise ValueError(f"No registered dependency for type {t}")
+    async def get(self, name: str, t: type) -> Any:
+        key: Tuple[str, type] = (name, t)
+        if key not in self.checker._dependency_injections:
+            raise ValueError(
+                f"No registered dependency for name {key[0]} and type {key[1]}"
+            )
 
-        injector = self.checker._dependency_injections[t]
+        injector = self.checker._dependency_injections[key]
         args = await self._exit_stack.enter_async_context(
             self.checker._inject_dependencies(self.task, injector, None)
         )
@@ -121,7 +124,7 @@ class Enochecker:
         self.name: str = name
         self.service_port: int = service_port
 
-        self._dependency_injections: Dict[type, Callable[..., Any]] = {}
+        self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(ELKFormatter("%(message)s"))
@@ -235,7 +238,7 @@ class Enochecker:
         self,
         task: BaseCheckerTaskMessage,
         f: Callable[..., Any],
-        dependencies: Optional[Set[type]] = None,
+        dependencies: Optional[Set[Tuple[str, type]]] = None,
     ) -> AsyncIterator[Any]:
         dependencies = dependencies or set()
 
@@ -249,7 +252,7 @@ class Enochecker:
             except TypeError:
                 # subscripted generics, e.g. AsyncSocket = Tuple[..., ...], cannot be used in issubclass
                 subclass = False
-            key: Tuple[str, object] = (v.name, v.annotation)
+            key: Tuple[str, type] = (v.name, v.annotation)
             if subclass:
                 args.append(task)
             elif key in dependencies:
@@ -354,10 +357,10 @@ class Enochecker:
     # Dependency Injection #
     ########################
 
-    def register_dependency(self, name: str) -> None:
-        def decorator(f: Callable[..., Any]):
+    def register_dependency(self, name: str) -> Callable[..., None]:
+        def decorator(f: Callable[..., Any]) -> None:
             sig = signature(f)
-            key: Tuple[str, object] = (name, sig.return_annotation)
+            key: Tuple[str, type] = (name, sig.return_annotation)
             if sig.return_annotation == Parameter.empty:
                 raise AttributeError(f"missing return annotation for {f.__name__}")
             if key in self._dependency_injections:
