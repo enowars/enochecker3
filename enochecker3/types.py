@@ -143,7 +143,9 @@ class OfflineException(BaseException):
 
 
 class InternalErrorException(BaseException):
-    pass
+    def __init__(self, message: Optional[str], inner: Optional[Exception] = None):
+        super().__init__(message)
+        self.inner: Optional[Exception] = inner
 
 
 class EnoLogMessage(BaseModel):

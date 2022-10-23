@@ -1,6 +1,6 @@
 import pytest
 
-from enochecker3 import Enochecker, HavocCheckerTaskMessage
+from enochecker3 import Enochecker, HavocCheckerTaskMessage, InternalErrorException
 from enochecker3.enochecker import CircularDependencyException
 
 
@@ -67,5 +67,7 @@ async def test_circular_dependency(
     async def havoc(param: str):
         pass
 
-    with pytest.raises(CircularDependencyException):
+    try:
         await checker._call_havoc(havoc_task)
+    except InternalErrorException as e:
+        assert type(e.inner) == CircularDependencyException
