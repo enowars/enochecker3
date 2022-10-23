@@ -8,13 +8,13 @@ from .types import MumbleException
 def assert_in(o1: Any, o2: Any, message: Optional[str] = None) -> None:
     if not o2 or o1 not in o2:
         raise MumbleException(
-            message or "assertion failed",
+            message or "Checker assertion failed",
         )
 
 
 def assert_equals(o1: Any, o2: Any, message: Optional[str] = None) -> None:
     if o1 != o2:
-        raise MumbleException(message or "assertion failed")
+        raise MumbleException(message or "Checker assertion failed")
 
 
 class FlagSearcher:

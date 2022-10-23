@@ -16,7 +16,7 @@ class ChainDB:
             }
         )
         if val is None:
-            raise KeyError(f"key {key} not found")
+            raise KeyError(f"Key {key} not found")
         return val["value"]
 
     async def set(self, key: str, val: Any) -> None:
