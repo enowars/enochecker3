@@ -20,11 +20,11 @@ class DebugFormatter(logging.Formatter):
         method: str = getattr(checker_task, "method", None) or "<method>"
         levelname: str = getattr(record, "levelname", None) or "<level>"
         task_id: str = getattr(checker_task, "task_id", None) or "<taskid>"
-        prefix: str = "{} {} {} {} : ".format(timestamp, levelname, method, task_id)
+        info_line: str = "{} {} {} {}".format(timestamp, levelname, method, task_id)
 
-        log_lines: List[str] = []
-        for line in record.msg.strip().split("\n"):
-            log_lines.append(prefix + line)
+        log_lines: List[str] = [info_line]
+        for i, line in enumerate(record.msg.strip().split("\n")):
+            log_lines.append("    | " + line)
 
         return "\n".join(log_lines)
 
