@@ -309,7 +309,12 @@ class Enochecker:
             logger = self._get_logger_adapter(task)
             logger.error(f"Service is responding too slow\n{trace}")
             raise MumbleException("Service is responding too slow")
-        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError):
+        except (
+            httpx.ConnectTimeout,
+            httpx.ConnectError,
+            httpx.ReadTimeout,
+            httpx.RemoteProtocolError,
+        ):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"HTTP connection to service failed\n{trace}")
