@@ -99,7 +99,7 @@ class DependencyInjector:
     ) -> Optional[bool]:
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
-    async def get(self, name: str, t: type) -> Any:
+    async def get(self, t: type, name: str = "") -> Any:
         injector = self.checker.resolve_injector(name, t)
         args = await self._exit_stack.enter_async_context(
             self.checker._inject_dependencies(self.task, injector, None)
@@ -264,19 +264,20 @@ class Enochecker:
                 subclass = False
             if subclass:
                 args.append(task)
-            injector = self.resolve_injector(v.name, v.annotation)
-            if injector in dependencies:
-                raise CircularDependencyException(
-                    f"Detected circular dependency in {f} with injected type {v.annotation}"
-                )
             else:
-                async with self._inject_dependencies(
-                    task, injector, dependencies.union([injector])
-                ) as args_:
-                    arg = injector(*args_)
-                    if isawaitable(arg):
-                        arg = await arg
-                    args.append(arg)
+                injector = self.resolve_injector(v.name, v.annotation)
+                if injector in dependencies:
+                    raise CircularDependencyException(
+                        f"Detected circular dependency in {f} with injected type {v.annotation}"
+                    )
+                else:
+                    async with self._inject_dependencies(
+                        task, injector, dependencies.union([injector])
+                    ) as args_:
+                        arg = injector(*args_)
+                        if isawaitable(arg):
+                            arg = await arg
+                        args.append(arg)
 
         async with AsyncExitStack() as stack:
             # new_args contains the return values of __(a)enter__, which would be the "x" in "(async) with ... as x:"
