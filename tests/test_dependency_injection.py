@@ -34,6 +34,23 @@ async def test_basic(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
 
 
 @pytest.mark.asyncio
+async def test_unnamed(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
+    @checker.register_dependency()
+    def inject_string() -> str:
+        return "123"
+
+    @checker.register_dependency("special")
+    def inject_special_string() -> str:
+        return "456"
+
+    @checker.havoc(0)
+    async def havoc(a: str, b: str, special: str):
+        assert a == "123" and b == "123" and special == "456"
+
+    await checker._call_havoc(havoc_task)
+
+
+@pytest.mark.asyncio
 async def test_recursive_dependency(
     checker: Enochecker, havoc_task: HavocCheckerTaskMessage
 ):

@@ -100,13 +100,7 @@ class DependencyInjector:
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
     async def get(self, name: str, t: type) -> Any:
-        key: Tuple[str, type] = (name.split("_", 1)[0], t)
-        if key not in self.checker._dependency_injections:
-            raise ValueError(
-                f"No registered dependency for name {key[0]} and type {key[1]}"
-            )
-
-        injector = self.checker._dependency_injections[key]
+        injector = self.checker.resolve_injector(name, t)
         args = await self._exit_stack.enter_async_context(
             self.checker._inject_dependencies(self.task, injector, None)
         )
@@ -143,14 +137,14 @@ class Enochecker:
                 logging.getLogger("uvicorn.access").getEffectiveLevel()
             )
 
-        self.register_dependency("client")(self._get_http_client)
-        self.register_dependency("chaindb")(self._get_chaindb)
-        self.register_dependency("motor_collection")(self._get_motor_collection)
-        self.register_dependency("motor_db")(self._get_motor_database)
-        self.register_dependency("searcher")(self._get_flag_searcher)
-        self.register_dependency("logger")(self._get_logger_adapter)
-        self.register_dependency("socket")(self._get_async_socket)
-        self.register_dependency("injector")(self._get_dependency_injector)
+        self.register_dependency()(self._get_http_client)
+        self.register_dependency()(self._get_chaindb)
+        self.register_dependency()(self._get_motor_collection)
+        self.register_dependency()(self._get_motor_database)
+        self.register_dependency()(self._get_flag_searcher)
+        self.register_dependency()(self._get_logger_adapter)
+        self.register_dependency()(self._get_async_socket)
+        self.register_dependency()(self._get_dependency_injector)
 
         self._method_variants: Dict[CheckerMethod, Dict[int, Callable[..., Any]]] = {
             CheckerMethod.PUTFLAG: {},
@@ -238,12 +232,23 @@ class Enochecker:
     def exploit(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
         return self._define_method(CheckerMethod.EXPLOIT, *variant_ids)
 
+    def resolve_injector(self, name: str, t: type) -> Callable[..., Any]:
+        key: Tuple[str, type] = (name.split("_", 1)[0], t)
+        if key not in self._dependency_injections:
+            generic_key: Tuple[str, type] = ("", t)
+            if generic_key not in self._dependency_injections:
+                raise ValueError(
+                    f"No registered dependency for name {key[0]} and/or type {key[1]}"
+                )
+            return self._dependency_injections[generic_key]
+        return self._dependency_injections[key]
+
     @asynccontextmanager
     async def _inject_dependencies(
         self,
         task: BaseCheckerTaskMessage,
         f: Callable[..., Any],
-        dependencies: Optional[Set[Tuple[str, type]]] = None,
+        dependencies: Optional[Set[Callable[..., Any]]] = None,
     ) -> AsyncIterator[Any]:
         dependencies = dependencies or set()
 
@@ -257,17 +262,16 @@ class Enochecker:
             except TypeError:
                 # subscripted generics, e.g. AsyncSocket = Tuple[..., ...], cannot be used in issubclass
                 subclass = False
-            key: Tuple[str, type] = (v.name.split("_", 1)[0], v.annotation)
             if subclass:
                 args.append(task)
-            elif key in dependencies:
+            injector = self.resolve_injector(v.name, v.annotation)
+            if injector in dependencies:
                 raise CircularDependencyException(
                     f"Detected circular dependency in {f} with injected type {v.annotation}"
                 )
             else:
-                injector = self._dependency_injections[key]
                 async with self._inject_dependencies(
-                    task, injector, dependencies.union([key])
+                    task, injector, dependencies.union([injector])
                 ) as args_:
                     arg = injector(*args_)
                     if isawaitable(arg):
@@ -376,7 +380,7 @@ class Enochecker:
     ########################
 
     def register_dependency(
-        self, name: str, cache: Dict[str, Callable[..., Any]] = {}
+        self, name: str = "", cache: Dict[str, Callable[..., Any]] = {}
     ) -> Callable[..., Any]:
         def decorator(f: Callable[..., Any]) -> Any:
             sig = signature(f)
