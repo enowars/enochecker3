@@ -299,6 +299,8 @@ class Enochecker:
                 self._call_method_raw(task),
                 timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
             )
+        except (MumbleException, OfflineException, InternalErrorException):
+            raise
         except asyncio.IncompleteReadError:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
@@ -319,6 +321,11 @@ class Enochecker:
             logger = self._get_logger_adapter(task)
             logger.info(f"HTTP connection to service failed\n{trace}")
             raise OfflineException("HTTP connection to service failed")
+        except Exception as e:
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.info(f"Checker internal error\n{trace}")
+            raise InternalErrorException("Checker internal error", e)
 
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
@@ -550,17 +557,9 @@ class Enochecker:
                 )
             except InternalErrorException as e:
                 trace = traceback.format_exc()
-                logger.info(f"Encountered explicit internal error exception:\n{trace}")
+                logger.info(f"Encountered internal error exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
-                )
-            except Exception as e:
-                traceback.print_exc()
-                trace = traceback.format_exc()
-                logger.critical(f"Encountered internal exception:\n{trace}")
-                return CheckerResultMessage(
-                    result=CheckerTaskResult.INTERNAL_ERROR,
-                    message=f"Unhandled exception of type {type(e)}",
                 )
 
         app.on_event("startup")(self._init)
