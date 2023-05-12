@@ -100,7 +100,7 @@ class DependencyInjector:
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
     async def get(self, name: str, t: type) -> Any:
-        key: Tuple[str, type] = (name, t)
+        key: Tuple[str, type] = (name.split("_", 1)[0], t)
         if key not in self.checker._dependency_injections:
             raise ValueError(
                 f"No registered dependency for name {key[0]} and type {key[1]}"
@@ -257,7 +257,7 @@ class Enochecker:
             except TypeError:
                 # subscripted generics, e.g. AsyncSocket = Tuple[..., ...], cannot be used in issubclass
                 subclass = False
-            key: Tuple[str, type] = (v.name, v.annotation)
+            key: Tuple[str, type] = (v.name.split("_", 1)[0], v.annotation)
             if subclass:
                 args.append(task)
             elif key in dependencies:
@@ -380,7 +380,7 @@ class Enochecker:
     ) -> Callable[..., Any]:
         def decorator(f: Callable[..., Any]) -> Any:
             sig = signature(f)
-            key: Tuple[str, type] = (name, sig.return_annotation)
+            key: Tuple[str, type] = (name.split("_", 1)[0], sig.return_annotation)
             if sig.return_annotation == Parameter.empty:
                 raise AttributeError(f"missing return annotation for {f.__name__}")
             if key in self._dependency_injections:

@@ -27,8 +27,8 @@ async def test_basic(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
         return "123"
 
     @checker.havoc(0)
-    async def havoc(x: str, y: str):
-        assert x == "123" and y == "123"
+    async def havoc(x_1: str, x_2: str, y: str):
+        assert x_1 == "123" and x_2 == "123" and y == "123"
 
     await checker._call_havoc(havoc_task)
 
