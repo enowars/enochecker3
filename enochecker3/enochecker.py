@@ -137,14 +137,14 @@ class Enochecker:
                 logging.getLogger("uvicorn.access").getEffectiveLevel()
             )
 
-        self.register_dependency()(self._get_http_client)
-        self.register_dependency()(self._get_chaindb)
-        self.register_dependency()(self._get_motor_collection)
-        self.register_dependency()(self._get_motor_database)
-        self.register_dependency()(self._get_flag_searcher)
-        self.register_dependency()(self._get_logger_adapter)
-        self.register_dependency()(self._get_async_socket)
-        self.register_dependency()(self._get_dependency_injector)
+        self.register_dependency(self._get_http_client)
+        self.register_dependency(self._get_chaindb)
+        self.register_dependency(self._get_motor_collection)
+        self.register_dependency(self._get_motor_database)
+        self.register_dependency(self._get_flag_searcher)
+        self.register_dependency(self._get_logger_adapter)
+        self.register_dependency(self._get_async_socket)
+        self.register_dependency(self._get_dependency_injector)
 
         self._method_variants: Dict[CheckerMethod, Dict[int, Callable[..., Any]]] = {
             CheckerMethod.PUTFLAG: {},
@@ -267,7 +267,7 @@ class Enochecker:
             injector = self.resolve_injector(v.name, v.annotation)
             if injector in dependencies:
                 raise CircularDependencyException(
-                    f"Detected circular dependency in {f} with injected type {v.annotation}"
+                    f"Detected circular dependency in {f} with injector {v.annotation}"
                 )
             else:
                 async with self._inject_dependencies(
@@ -379,10 +379,8 @@ class Enochecker:
     # Dependency Injection #
     ########################
 
-    def register_dependency(
-        self, name: str = "", cache: Dict[str, Callable[..., Any]] = {}
-    ) -> Callable[..., Any]:
-        def decorator(f: Callable[..., Any]) -> Any:
+    def register_named_dependency(self, name: str = "") -> Callable[..., Any]:
+        def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
             sig = signature(f)
             key: Tuple[str, type] = (name.split("_", 1)[0], sig.return_annotation)
             if sig.return_annotation == Parameter.empty:
@@ -397,6 +395,9 @@ class Enochecker:
             return f
 
         return decorator
+
+    def register_dependency(self, f: Callable[..., Any]) -> Callable[..., Any]:
+        return self.register_named_dependency("")(f)
 
     def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
         return httpx.AsyncClient(

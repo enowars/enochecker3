@@ -21,25 +21,24 @@ def havoc_task() -> HavocCheckerTaskMessage:
 
 @pytest.mark.asyncio
 async def test_basic(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
-    @checker.register_dependency("x")
-    @checker.register_dependency("y")
+    @checker.register_dependency
     def inject_string() -> str:
         return "123"
 
     @checker.havoc(0)
-    async def havoc(x_1: str, x_2: str, y: str):
-        assert x_1 == "123" and x_2 == "123" and y == "123"
+    async def havoc(param: str):
+        assert param == "123"
 
     await checker._call_havoc(havoc_task)
 
 
 @pytest.mark.asyncio
 async def test_unnamed(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
-    @checker.register_dependency()
+    @checker.register_dependency
     def inject_string() -> str:
         return "123"
 
-    @checker.register_dependency("special")
+    @checker.register_named_dependency("special")
     def inject_special_string() -> str:
         return "456"
 
@@ -54,17 +53,17 @@ async def test_unnamed(checker: Enochecker, havoc_task: HavocCheckerTaskMessage)
 async def test_recursive_dependency(
     checker: Enochecker, havoc_task: HavocCheckerTaskMessage
 ):
-    @checker.register_dependency("x")
+    @checker.register_dependency
     def inject_string(x: int) -> str:
         return f"int: {x}"
 
-    @checker.register_dependency("x")
+    @checker.register_dependency
     def inject_integer() -> int:
         return 15
 
     @checker.havoc(0)
-    async def havoc(x: str):
-        assert x == "int: 15"
+    async def havoc(param: str):
+        assert param == "int: 15"
 
     await checker._call_havoc(havoc_task)
 
@@ -73,16 +72,16 @@ async def test_recursive_dependency(
 async def test_circular_dependency(
     checker: Enochecker, havoc_task: HavocCheckerTaskMessage
 ):
-    @checker.register_dependency("x")
+    @checker.register_dependency
     def inject_string(x: int) -> str:
         return f"int: {x}"
 
-    @checker.register_dependency("x")
+    @checker.register_dependency
     def inject_integer(x: str) -> int:
         return len(x)
 
     @checker.havoc(0)
-    async def havoc(x: str):
+    async def havoc(param: str):
         pass
 
     with pytest.raises(InternalErrorException) as exc_info:
