@@ -166,7 +166,7 @@ class Enochecker:
 
         if (mongo_user and not mongo_password) or (not mongo_user and mongo_password):
             raise ValueError(
-                "cannot set only MONGO_USER or MONGO_PASSWORD, must set none or both"
+                "Cannot set only MONGO_USER or MONGO_PASSWORD, must set none or both"
             )
 
         if mongo_user:
@@ -208,7 +208,7 @@ class Enochecker:
 
             if variant_id in self._method_variants[method]:
                 raise InvalidVariantIdsException(
-                    f"variant_id {variant_id} already defined for method {method}"
+                    f"Variant_id {variant_id} already defined for method {method}"
                 )
 
         def wrapper(f: Callable[..., Any]) -> None:
@@ -258,7 +258,7 @@ class Enochecker:
                 args.append(task)
             elif v.annotation in dependencies:
                 raise CircularDependencyException(
-                    f"detected circular dependency in {f} with injected type {v.annotation}"
+                    f"Detected circular dependency in {f} with injected type {v.annotation}"
                 )
             else:
                 injector = self._dependency_injections[v.annotation]
@@ -287,7 +287,7 @@ class Enochecker:
             f = self._method_variants[method][variant_id]
         except KeyError:
             raise AttributeError(
-                f"variant_id {variant_id} not defined for method {method}"
+                f"Variant_id {variant_id} not defined for method {method}"
             )
 
         async with self._inject_dependencies(task, f) as args:
@@ -311,7 +311,12 @@ class Enochecker:
             logger = self._get_logger_adapter(task)
             logger.error(f"Service is responding too slow\n{trace}")
             raise MumbleException("Service is responding too slow")
-        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError):
+        except (
+            httpx.ConnectTimeout,
+            httpx.ConnectError,
+            httpx.ReadTimeout,
+            httpx.RemoteProtocolError,
+        ):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"HTTP connection to service failed\n{trace}")
@@ -369,10 +374,10 @@ class Enochecker:
     def register_dependency(self, f: Callable[..., Any]) -> None:
         sig = signature(f)
         if sig.return_annotation == Parameter.empty:
-            raise AttributeError(f"missing return annotation for {f.__name__}")
+            raise AttributeError(f"Missing return annotation for {f.__name__}")
         if sig.return_annotation in self._dependency_injections:
             raise ValueError(
-                f"already registered a dependency with return type {sig.return_annotation}"
+                f"Already registered a dependency with return type {sig.return_annotation}"
             )
 
         self._dependency_injections[sig.return_annotation] = f
@@ -440,14 +445,14 @@ class Enochecker:
         getflag_keys = self._method_variants[CheckerMethod.GETFLAG].keys()
         if putflag_keys != getflag_keys:
             raise InvalidVariantIdsException(
-                "mismatch between putflag and getflag variants"
+                "Mismatch between putflag and getflag variants"
             )
 
         putnoise_keys = self._method_variants[CheckerMethod.PUTNOISE].keys()
         getnoise_keys = self._method_variants[CheckerMethod.GETNOISE].keys()
         if putnoise_keys != getnoise_keys:
             raise InvalidVariantIdsException(
-                "mismatch between putnoise and getnoise variants"
+                "Mismatch between putnoise and getnoise variants"
             )
 
         for method in self._method_variants.keys():
