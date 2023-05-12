@@ -267,7 +267,7 @@ class Enochecker:
             injector = self.resolve_injector(v.name, v.annotation)
             if injector in dependencies:
                 raise CircularDependencyException(
-                    f"Detected circular dependency in {f} with injector {v.annotation}"
+                    f"Detected circular dependency in {f} with injected type {v.annotation}"
                 )
             else:
                 async with self._inject_dependencies(
