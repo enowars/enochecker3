@@ -375,8 +375,10 @@ class Enochecker:
     # Dependency Injection #
     ########################
 
-    def register_dependency(self, name: str) -> Callable[..., None]:
-        def decorator(f: Callable[..., Any]) -> None:
+    def register_dependency(
+        self, name: str, cache: Dict[str, Callable[..., Any]] = {}
+    ) -> Callable[..., Any]:
+        def decorator(f: Callable[..., Any]) -> Any:
             sig = signature(f)
             key: Tuple[str, type] = (name, sig.return_annotation)
             if sig.return_annotation == Parameter.empty:
@@ -387,6 +389,8 @@ class Enochecker:
                 )
 
             self._dependency_injections[key] = f
+
+            return f
 
         return decorator
 

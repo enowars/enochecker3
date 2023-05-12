@@ -22,12 +22,13 @@ def havoc_task() -> HavocCheckerTaskMessage:
 @pytest.mark.asyncio
 async def test_basic(checker: Enochecker, havoc_task: HavocCheckerTaskMessage):
     @checker.register_dependency("x")
+    @checker.register_dependency("y")
     def inject_string() -> str:
         return "123"
 
     @checker.havoc(0)
-    async def havoc(x: str):
-        assert x == "123"
+    async def havoc(x: str, y: str):
+        assert x == "123" and y == "123"
 
     await checker._call_havoc(havoc_task)
 
