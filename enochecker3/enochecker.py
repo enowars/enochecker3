@@ -99,11 +99,8 @@ class DependencyInjector:
     ) -> Optional[bool]:
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
-    async def get(self, t: type) -> Any:
-        if t not in self.checker._dependency_injections:
-            raise ValueError(f"No registered dependency for type {t}")
-
-        injector = self.checker._dependency_injections[t]
+    async def get(self, t: type, name: str = "") -> Any:
+        injector = self.checker.resolve_injector(name, t)
         args = await self._exit_stack.enter_async_context(
             self.checker._inject_dependencies(self.task, injector, None)
         )
@@ -123,7 +120,7 @@ class Enochecker:
 
         self.checker_name: str = service_name + "Checker"
 
-        self._dependency_injections: Dict[type, Callable[..., Any]] = {}
+        self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
 
         handler = logging.StreamHandler(sys.stdout)
@@ -235,12 +232,23 @@ class Enochecker:
     def exploit(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
         return self._define_method(CheckerMethod.EXPLOIT, *variant_ids)
 
+    def resolve_injector(self, name: str, t: type) -> Callable[..., Any]:
+        key: Tuple[str, type] = (name.split("_", 1)[0], t)
+        if key not in self._dependency_injections:
+            generic_key: Tuple[str, type] = ("", t)
+            if generic_key not in self._dependency_injections:
+                raise ValueError(
+                    f"No registered dependency for name {key[0]} and/or type {key[1]}"
+                )
+            return self._dependency_injections[generic_key]
+        return self._dependency_injections[key]
+
     @asynccontextmanager
     async def _inject_dependencies(
         self,
         task: BaseCheckerTaskMessage,
         f: Callable[..., Any],
-        dependencies: Optional[Set[type]] = None,
+        dependencies: Optional[Set[Callable[..., Any]]] = None,
     ) -> AsyncIterator[Any]:
         dependencies = dependencies or set()
 
@@ -256,19 +264,20 @@ class Enochecker:
                 subclass = False
             if subclass:
                 args.append(task)
-            elif v.annotation in dependencies:
-                raise CircularDependencyException(
-                    f"Detected circular dependency in {f} with injected type {v.annotation}"
-                )
             else:
-                injector = self._dependency_injections[v.annotation]
-                async with self._inject_dependencies(
-                    task, injector, dependencies.union([v.annotation])
-                ) as args_:
-                    arg = injector(*args_)
-                    if isawaitable(arg):
-                        arg = await arg
-                    args.append(arg)
+                injector = self.resolve_injector(v.name, v.annotation)
+                if injector in dependencies:
+                    raise CircularDependencyException(
+                        f"Detected circular dependency in {f} with injected type {v.annotation}"
+                    )
+                else:
+                    async with self._inject_dependencies(
+                        task, injector, dependencies.union([injector])
+                    ) as args_:
+                        arg = injector(*args_)
+                        if isawaitable(arg):
+                            arg = await arg
+                        args.append(arg)
 
         async with AsyncExitStack() as stack:
             # new_args contains the return values of __(a)enter__, which would be the "x" in "(async) with ... as x:"
@@ -371,16 +380,25 @@ class Enochecker:
     # Dependency Injection #
     ########################
 
-    def register_dependency(self, f: Callable[..., Any]) -> None:
-        sig = signature(f)
-        if sig.return_annotation == Parameter.empty:
-            raise AttributeError(f"Missing return annotation for {f.__name__}")
-        if sig.return_annotation in self._dependency_injections:
-            raise ValueError(
-                f"Already registered a dependency with return type {sig.return_annotation}"
-            )
+    def register_named_dependency(self, name: str = "") -> Callable[..., Any]:
+        def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
+            sig = signature(f)
+            key: Tuple[str, type] = (name.split("_", 1)[0], sig.return_annotation)
+            if sig.return_annotation == Parameter.empty:
+                raise AttributeError(f"missing return annotation for {f.__name__}")
+            if key in self._dependency_injections:
+                raise ValueError(
+                    f"already registered a dependency with name {key[0]} and type {key[1]}"
+                )
 
-        self._dependency_injections[sig.return_annotation] = f
+            self._dependency_injections[key] = f
+
+            return f
+
+        return decorator
+
+    def register_dependency(self, f: Callable[..., Any]) -> Callable[..., Any]:
+        return self.register_named_dependency("")(f)
 
     def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
         return httpx.AsyncClient(
