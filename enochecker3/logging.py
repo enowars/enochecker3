@@ -61,7 +61,7 @@ class ELKFormatter(logging.Formatter):
             record, "checker_task", None
         )
         service_name: Optional[str] = getattr(record, "service_name", None)
-        checker_name: Optional[str] = getattr(record, "checker_name", None)
+        checker_name: str = getattr(record, "checker_name")
         return EnoLogMessage(
             tool=checker_name,
             type="infrastructure",
