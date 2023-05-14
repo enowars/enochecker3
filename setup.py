@@ -9,7 +9,7 @@ with open("requirements.txt", "r") as f:
 
 setuptools.setup(
     name="enochecker3",
-    version="0.7.1",
+    version="0.8.0",
     author="ldruschk",
     author_email="ldruschk@posteo.de",
     description="FastAPI based library for building async python checkers for the EnoEngine A/D CTF Framework",
@@ -35,6 +35,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     zip_safe=False,  # This might be needed for requirements.txt
     python_requires=">=3.7",
