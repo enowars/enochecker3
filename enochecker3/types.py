@@ -91,7 +91,7 @@ class HavocCheckerTaskMessage(BaseCheckerTaskMessage):
 class ExploitCheckerTaskMessage(BaseCheckerTaskMessage):
     flag_regex: str
     flag_hash: str
-    attack_info: Optional[str] = None
+    attack_info: Optional[str]
 
     method = CheckerMethod.EXPLOIT
 
@@ -106,7 +106,7 @@ class CheckerInfoMessage(BaseModel):
 
 class CheckerResultMessage(BaseModel):
     result: CheckerTaskResult
-    message: Optional[str] = None
+    message: Optional[str]
     attack_info: Optional[str] = None
     flag: Optional[str] = None
 
@@ -167,6 +167,6 @@ class EnoLogMessage(BaseModel):
     flag: Optional[str]
     variant_id: Optional[int]
     task_chain_id: Optional[str]
-    flag_regex: Optional[str] = None
-    flag_hash: Optional[str] = None
-    attack_info: Optional[str] = None
+    flag_regex: Optional[str]
+    flag_hash: Optional[str]
+    attack_info: Optional[str]

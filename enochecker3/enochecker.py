@@ -101,9 +101,7 @@ class DependencyInjector:
 
     async def get(self, t: type, name: str = "") -> Any:
         injector = self.checker.resolve_injector(name, t)
-        args = await self.checker._inject_dependencies(
-            self.task, injector, self._exit_stack
-        )
+        args = self.checker._inject_dependencies(self.task, injector, self._exit_stack)
         res = injector(*args)
         if isawaitable(res):
             res = await res
@@ -300,8 +298,7 @@ class Enochecker:
 
         async with AsyncExitStack() as stack:
             args = await self._inject_dependencies(task, f, stack)
-            res = await f(*args)
-        return res
+            return await f(*args)
 
     async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str]:
         try:
