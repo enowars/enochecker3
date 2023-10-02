@@ -106,7 +106,7 @@ class CheckerInfoMessage(BaseModel):
 
 class CheckerResultMessage(BaseModel):
     result: CheckerTaskResult
-    message: Optional[str]
+    message: Optional[str] = None
     attack_info: Optional[str] = None
     flag: Optional[str] = None
 
@@ -130,8 +130,9 @@ class CheckerTaskMessage(BaseModel):
 
 
 class BaseException(Exception):
-    def __init__(self, message: Optional[str]):
+    def __init__(self, message: Optional[str], log_message: Optional[str] = None):
         self.message: Optional[str] = message
+        self.log_message: Optional[str] = log_message
 
 
 class MumbleException(BaseException):
@@ -143,8 +144,13 @@ class OfflineException(BaseException):
 
 
 class InternalErrorException(BaseException):
-    def __init__(self, message: Optional[str], inner: Optional[Exception] = None):
-        super().__init__(message)
+    def __init__(
+        self,
+        message: Optional[str],
+        log_message: Optional[str] = None,
+        inner: Optional[Exception] = None,
+    ):
+        super().__init__(message, log_message)
         self.inner: Optional[Exception] = inner
 
 

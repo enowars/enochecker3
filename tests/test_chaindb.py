@@ -2,6 +2,7 @@ import secrets
 
 import pymongo
 import pytest
+import pytest_asyncio
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
     AsyncIOMotorCollection,
@@ -11,7 +12,7 @@ from motor.motor_asyncio import (
 from enochecker3 import ChainDB
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def collection():
     mongo: AsyncIOMotorClient = AsyncIOMotorClient()
     db: AsyncIOMotorDatabase = mongo["enochecker3_tests"]
@@ -26,7 +27,7 @@ async def collection():
     return chain_collection
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def chaindb(collection):
     task_chain_id = secrets.token_hex(8)
     return ChainDB(collection, task_chain_id)
