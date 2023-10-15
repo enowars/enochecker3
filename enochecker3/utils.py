@@ -6,7 +6,7 @@ from typing import Any, Optional, Union
 from .types import MumbleException
 
 
-def caller_loc():
+def caller_loc() -> str:
     trace = traceback.StackSummary.extract(traceback.walk_stack(None))
     caller = list(trace)[2]
     return f"{caller.filename}:{caller.lineno}"
