@@ -332,7 +332,7 @@ class Enochecker:
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"Checker internal error\n{trace}")
-            raise InternalErrorException("Checker internal error", e)
+            raise InternalErrorException("Checker internal error", inner=e)
 
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
@@ -559,18 +559,24 @@ class Enochecker:
                     )
             except MumbleException as e:
                 trace = traceback.format_exc()
+                if e.log_message:
+                    logger.info(e.log_message)
                 logger.info(f"Encountered mumble exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.MUMBLE, message=e.message
                 )
             except OfflineException as e:
                 trace = traceback.format_exc()
+                if e.log_message:
+                    logger.info(e.log_message)
                 logger.info(f"Encountered offline exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.OFFLINE, message=e.message
                 )
             except InternalErrorException as e:
                 trace = traceback.format_exc()
+                if e.log_message:
+                    logger.info(e.log_message)
                 logger.info(f"Encountered internal error exception:\n{trace}")
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
