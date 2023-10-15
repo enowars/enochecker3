@@ -26,11 +26,8 @@ import httpx
 import pymongo
 import uvicorn
 from fastapi import FastAPI
-from motor.motor_asyncio import (
-    AsyncIOMotorClient,
-    AsyncIOMotorCollection,
-    AsyncIOMotorDatabase,
-)
+from motor.core import AgnosticClient, AgnosticCollection, AgnosticDatabase
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
@@ -173,10 +170,10 @@ class Enochecker:
         else:
             connection_string = f"mongodb://{mongo_host}:{mongo_port}"
 
-        self._mongo: AsyncIOMotorClient = AsyncIOMotorClient(connection_string)
-        self._mongodb: AsyncIOMotorDatabase = self._mongo[self.checker_name]
+        self._mongo: AgnosticClient = AsyncIOMotorClient(connection_string)
+        self._mongodb: AgnosticDatabase = self._mongo[self.checker_name]
 
-        self._chain_collection: AsyncIOMotorCollection = self._mongodb["chain_db"]
+        self._chain_collection: AgnosticCollection = self._mongodb["chain_db"]
 
         await self._chain_collection.create_index(
             [("task_chain_id", pymongo.ASCENDING), ("key", pymongo.ASCENDING)],
@@ -409,12 +406,10 @@ class Enochecker:
     def _get_chaindb(self, task: BaseCheckerTaskMessage) -> ChainDB:
         return ChainDB(self._chain_collection, task.task_chain_id)
 
-    def _get_motor_collection(
-        self, task: BaseCheckerTaskMessage
-    ) -> AsyncIOMotorCollection:
+    def _get_motor_collection(self, task: BaseCheckerTaskMessage) -> AgnosticCollection:
         return self._mongodb[f"team_{task.team_id}"]
 
-    def _get_motor_database(self, task: BaseCheckerTaskMessage) -> AsyncIOMotorDatabase:
+    def _get_motor_database(self, task: BaseCheckerTaskMessage) -> AgnosticDatabase:
         return self._mongodb
 
     def _get_flag_searcher(self, task: ExploitCheckerTaskMessage) -> FlagSearcher:
