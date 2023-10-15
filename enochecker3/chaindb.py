@@ -1,20 +1,20 @@
-from typing import Any
+from typing import Any, Optional
 
-from motor.motor_asyncio import AsyncIOMotorCollection
+from motor.core import AgnosticCollection
 
 
 class ChainDB:
-    def __init__(self, collection: AsyncIOMotorCollection, task_chain_id: str):
-        self.collection: AsyncIOMotorCollection = collection
+    def __init__(self, collection: AgnosticCollection, task_chain_id: str):
+        self.collection: AgnosticCollection = collection
         self.task_chain_id: str = task_chain_id
 
     async def get(self, key: str) -> Any:
-        val = await self.collection.find_one(
+        val: Optional[Any] = await self.collection.find_one(
             {
                 "task_chain_id": self.task_chain_id,
                 "key": key,
             }
-        )
+        )  # type: ignore
         if val is None:
             raise KeyError(f"Key {key} not found")
         return val["value"]
