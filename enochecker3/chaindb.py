@@ -14,7 +14,7 @@ class ChainDB:
                 "task_chain_id": self.task_chain_id,
                 "key": key,
             }
-        )  # type: ignore
+        )
         if val is None:
             raise KeyError(f"Key {key} not found")
         return val["value"]
