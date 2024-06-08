@@ -17,7 +17,7 @@ def _to_camel_case(x: str) -> str:
 class BaseModel(PydanticBaseModel):
     model_config = ConfigDict(
         use_enum_values=True,
-        alias_generator=AliasGenerator(serialization_alias=to_camel),
+        alias_generator=AliasGenerator(alias=to_camel),
         populate_by_name=True,
     )
 
