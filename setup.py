@@ -9,7 +9,7 @@ with open("requirements.txt", "r") as f:
 
 setuptools.setup(
     name="enochecker3",
-    version="0.9.0",
+    version="0.9.1",
     author="ldruschk",
     author_email="ldruschk@posteo.de",
     description="FastAPI based library for building async python checkers for the EnoEngine A/D CTF Framework",
