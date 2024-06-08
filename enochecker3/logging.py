@@ -41,7 +41,7 @@ class ELKFormatter(logging.Formatter):
             trunc: int = message_size + len(suffix) - 32766
             msg.message = msg.message[:-trunc] + suffix
 
-        return LOGGING_PREFIX + msg.json(by_alias=True)
+        return LOGGING_PREFIX + msg.model_dump_json(by_alias=True)
 
     def to_level(self, levelname: str) -> int:
         if levelname == "CRITICAL":
@@ -67,7 +67,9 @@ class ELKFormatter(logging.Formatter):
             type="infrastructure",
             severity=record.levelname,
             severity_level=self.to_level(record.levelname),
-            timestamp=datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            timestamp=datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ"
+            ),
             message=record.msg,
             module=record.module,
             function=record.funcName,
@@ -81,4 +83,7 @@ class ELKFormatter(logging.Formatter):
             flag=getattr(checker_task, "flag", None),
             variant_id=getattr(checker_task, "variant_id", None),
             task_chain_id=getattr(checker_task, "task_chain_id", None),
+            flag_regex=getattr(checker_task, "flag_regex", None),
+            flag_hash=getattr(checker_task, "flag_hash", None),
+            attack_info=getattr(checker_task, "attack_info", None),
         )

@@ -2,7 +2,10 @@ import re
 from enum import Enum
 from typing import ClassVar, Optional
 
+from pydantic import AliasGenerator
 from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict
+from pydantic.alias_generators import to_camel
 
 SNAKE_CASE_PATTERN = re.compile("(_[a-z])")
 
@@ -12,10 +15,11 @@ def _to_camel_case(x: str) -> str:
 
 
 class BaseModel(PydanticBaseModel):
-    class Config:
-        use_enum_values = True
-        alias_generator = _to_camel_case
-        allow_population_by_field_name = True
+    model_config = ConfigDict(
+        use_enum_values=True,
+        alias_generator=AliasGenerator(serialization_alias=to_camel),
+        populate_by_name=True,
+    )
 
 
 class CheckerTaskResult(str, Enum):
