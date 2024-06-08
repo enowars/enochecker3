@@ -19,8 +19,8 @@ format:
 test:
 	pip3 install .
 ifdef GITHUB_ACTIONS
-	coverage run -m pytest -v --with_mongodb
+	coverage run -m pytest -W error -v --with_mongodb
 else
-	coverage run -m pytest -v
+	coverage run -m pytest -W error -v
 endif
 	coverage report -m
