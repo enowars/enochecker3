@@ -16,9 +16,9 @@ class DebugFormatter(logging.Formatter):
             record, "checker_task", None
         )
 
-        timestamp: str = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S.%f")[
-            :-3
-        ]
+        timestamp: str = datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%H:%M:%S.%f"
+        )[:-3]
         method: str = getattr(checker_task, "method", None) or "<method>"
         levelname: str = getattr(record, "levelname", None) or "<level>"
         task_id: str = getattr(checker_task, "task_id", None) or "<taskid>"
