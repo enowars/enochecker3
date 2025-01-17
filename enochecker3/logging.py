@@ -16,7 +16,9 @@ class DebugFormatter(logging.Formatter):
             record, "checker_task", None
         )
 
-        timestamp: str = datetime.datetime.utcnow().strftime("%H:%M:%S.%f")[:-3]
+        timestamp: str = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S.%f")[
+            :-3
+        ]
         method: str = getattr(checker_task, "method", None) or "<method>"
         levelname: str = getattr(record, "levelname", None) or "<level>"
         task_id: str = getattr(checker_task, "task_id", None) or "<taskid>"
@@ -67,7 +69,7 @@ class ELKFormatter(logging.Formatter):
             type="infrastructure",
             severity=record.levelname,
             severity_level=self.to_level(record.levelname),
-            timestamp=datetime.datetime.now(datetime.timezone.utc).strftime(
+            timestamp=datetime.datetime.now(datetime.UTC).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             ),
             message=record.msg,
