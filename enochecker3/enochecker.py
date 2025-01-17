@@ -553,7 +553,7 @@ class Enochecker:
                         cast(ExploitCheckerTaskMessage, _task)
                     )
                 else:
-                    return CheckerResultMessage(
+                    return CheckerResultMessage(  # type: ignore
                         result=CheckerTaskResult.INTERNAL_ERROR,
                         message=f"Unsupported method: {task.method}",
                     )
