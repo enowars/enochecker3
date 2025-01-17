@@ -69,7 +69,7 @@ class ELKFormatter(logging.Formatter):
             type="infrastructure",
             severity=record.levelname,
             severity_level=self.to_level(record.levelname),
-            timestamp=datetime.datetime.now(datetime.UTC).strftime(
+            timestamp=datetime.datetime.now(datetime.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             ),
             message=record.msg,
