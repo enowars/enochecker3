@@ -54,5 +54,6 @@ async def exploit_test(searcher: FlagSearcher, client: AsyncClient) -> Optional[
     if flag := searcher.search_flag(r.text):
         return flag
 
+
 if __name__ == "__main__":
     checker.run()

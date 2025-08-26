@@ -53,4 +53,4 @@ def test_search_flag_not_found(haystack):
 
     searcher = FlagSearcher(flag_regex, flag_hash)
 
-    assert searcher.search_flag(haystack) == None
+    assert searcher.search_flag(haystack) is None

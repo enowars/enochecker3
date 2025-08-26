@@ -410,6 +410,7 @@ class Enochecker:
         return self._mongodb[f"team_{task.team_id}"]
 
     def _get_motor_database(self, task: BaseCheckerTaskMessage) -> AgnosticDatabase:
+        _ = task
         return self._mongodb
 
     def _get_flag_searcher(self, task: ExploitCheckerTaskMessage) -> FlagSearcher:
@@ -455,29 +456,42 @@ class Enochecker:
     #########################
 
     def _validate_variant_ids(self) -> Tuple[int, int, int, int]:
-        putflag_keys = self._method_variants[CheckerMethod.PUTFLAG].keys()
-        getflag_keys = self._method_variants[CheckerMethod.GETFLAG].keys()
-        if putflag_keys != getflag_keys:
-            raise InvalidVariantIdsException(
-                "Mismatch between putflag and getflag variants"
-            )
+        if env := os.environ.get("ENOCHECKER_FLAG_VARIANTS"):
+            flag_variants = int(env)
+        else:
+            putflag_keys = self._method_variants[CheckerMethod.PUTFLAG].keys()
+            getflag_keys = self._method_variants[CheckerMethod.GETFLAG].keys()
+            if putflag_keys != getflag_keys:
+                raise InvalidVariantIdsException(
+                    "Mismatch between putflag and getflag variants"
+                )
+            flag_variants = len(self._method_variants[CheckerMethod.GETFLAG])
 
-        putnoise_keys = self._method_variants[CheckerMethod.PUTNOISE].keys()
-        getnoise_keys = self._method_variants[CheckerMethod.GETNOISE].keys()
-        if putnoise_keys != getnoise_keys:
-            raise InvalidVariantIdsException(
-                "Mismatch between putnoise and getnoise variants"
-            )
+        if env := os.environ.get("ENOCHECKER_NOISE_VARIANTS"):
+            noise_variants = int(env)
+        else:
+            putnoise_keys = self._method_variants[CheckerMethod.PUTNOISE].keys()
+            getnoise_keys = self._method_variants[CheckerMethod.GETNOISE].keys()
+            if putnoise_keys != getnoise_keys:
+                raise InvalidVariantIdsException(
+                    "Mismatch between putnoise and getnoise variants"
+                )
+            noise_variants = len(self._method_variants[CheckerMethod.GETNOISE])
+
+        if env := os.environ.get("ENOCHECKER_HAVOC_VARIANTS"):
+            havoc_variants = int(env)
+        else:
+            havoc_variants = len(self._method_variants[CheckerMethod.HAVOC])
+
+        if env := os.environ.get("ENOCHECKER_EXPLOIT_VARIANTS"):
+            exploit_variants = int(env)
+        else:
+            exploit_variants = len(self._method_variants[CheckerMethod.EXPLOIT])
 
         for method in self._method_variants.keys():
             self._ensure_sequential_variant_ids(method)
 
-        return (
-            len(self._method_variants[CheckerMethod.PUTFLAG]),
-            len(self._method_variants[CheckerMethod.PUTNOISE]),
-            len(self._method_variants[CheckerMethod.HAVOC]),
-            len(self._method_variants[CheckerMethod.EXPLOIT]),
-        )
+        return (flag_variants, noise_variants, havoc_variants, exploit_variants)
 
     def _ensure_sequential_variant_ids(self, method: CheckerMethod) -> None:
         keys = sorted(list(self._method_variants[method].keys()))

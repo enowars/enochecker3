@@ -36,7 +36,7 @@ class FlagSearcher:
         self.flag_hash: str = flag_hash
 
     def search_flag(self, haystack: Union[str, bytes]) -> Optional[bytes]:
-        if type(haystack) == str:
+        if type(haystack) is str:
             haystack = haystack.encode()
         for flag in self._flag_re.findall(haystack):
             hash_ = hashlib.sha256(flag).hexdigest()

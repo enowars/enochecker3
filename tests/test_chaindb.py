@@ -21,7 +21,9 @@ async def collection():
         unique=True,
     )
 
-    return chain_collection
+    yield chain_collection
+
+    mongo.close()
 
 
 @pytest_asyncio.fixture

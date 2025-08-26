@@ -7,40 +7,49 @@ on:
   pull_request:
     branches:
       - main
-  schedule:
-    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: python test
+    runs-on: arc-runner-dink
+    name: python test and build
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+
+    - name: Setup environment
       run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: pytest
+        sudo apt update -y && sudo apt install make
+        python -m pip install uv==0.8.5
+        echo "UV_FLAGS=--exact --isolated --frozen" >> $GITHUB_ENV
+
+    - name: Check formatting
       run: |
-        docker run -d -p 27017:27017 mongo
-        pip install -r dev-requirements.txt
-        make test
-    - name: lint
+        make --trace format
+
+    - name: Check linting
       run: |
-        pip install -r dev-requirements.txt
-        make lint
-    - name: test sdist
+        make --trace lint
+
+    - name: Check typing
       run: |
-        mkdir /tmp/test_sdist
-        python setup.py sdist -d /tmp/test_sdist
-        cd /tmp/test_sdist
-        pip install enochecker3-*.tar.gz
+        make --trace mypy
+
+    - name: Run tests
+      run: |
+        mongo_cid=$(docker run -d -p 27017:27017 mongo)
+        TEST_FLAGS=--with_mongodb make --trace test
+        docker kill $mongo_cid
+
+    - name: Test build
+      run: |
+        make --trace build
+        pip install dist/enochecker3-*.tar.gz

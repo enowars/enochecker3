@@ -86,4 +86,4 @@ async def test_circular_dependency(
 
     with pytest.raises(InternalErrorException) as exc_info:
         await checker._call_havoc(havoc_task)
-    assert type(exc_info.value.inner) == CircularDependencyException
+    assert type(exc_info.value.inner) is CircularDependencyException

@@ -1,26 +1,33 @@
-.PHONY: all lint diff format test
+UV_FLAGS ?= --inexact
+UV_RUN ?= env VIRTUAL_ENV=.venv uv run $(UV_FLAGS)
 
-all: format test
+TEST_FLAGS ?=
 
-lint:
-	python3 -m isort -c enochecker3/ tests/
-	python3 -m black --check enochecker3/ tests/
-	python3 -m flake8 enochecker3/  tests/
-	python3 -m mypy enochecker3/ tests/
+all: format lint mypy test
 
-diff:
-	python3 -m isort --diff enochecker3/ tests/
-	python3 -m black --diff enochecker3/ tests/
+fix: format-fix lint-fix
 
 format:
-	python3 -m isort enochecker3/ tests/
-	python3 -m black enochecker3/ tests/
+	@$(UV_RUN) --group format ruff format --check
+
+format-fix:
+	@$(UV_RUN) --group format ruff format
+
+lint:
+	@$(UV_RUN) --group lint ruff check
+
+lint-fix:
+	@$(UV_RUN) --group lint ruff check --fix
+
+mypy:
+	@$(UV_RUN) --group typing mypy enochecker3/
+
+build:
+	@uv build
 
 test:
-	pip3 install .
-ifdef GITHUB_ACTIONS
-	coverage run -m pytest -W error -v --with_mongodb
-else
-	coverage run -m pytest -W error -v
-endif
-	coverage report -m
+	@test -z "$(shell ls tests)" || \
+		($(UV_RUN) --group test coverage run -m pytest -W error -v $(TEST_FLAGS) && \
+		$(UV_RUN) --group test coverage report -m)
+
+.PHONY: all fix format format-fix lint lint-fix mypy test build

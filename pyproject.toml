@@ -1,0 +1,52 @@
+[project]
+name = "enochecker3"
+version = "0.10.1"
+authors = [
+	{ name = "Louis Burda", email = "dev@sinitax.com" },
+	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
+]
+description = "Async Python library for building checkers compatible with EnoEngine specification"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.115.6,<0.116.0",
+    "gunicorn==23.0.0",
+    "httpx>=0.28.0,<0.29.0",
+    "motor>=3.6.1,<4.0.0",
+    "uvicorn>=0.34.0,<0.35.0",
+]
+
+[dependency-groups]
+format = [
+    "ruff>=0.12.10",
+]
+lint = [
+    "ruff>=0.12.10",
+]
+test = [
+    "coverage>=7.10.5",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+]
+typing = [
+    "mypy>=1.17.1",
+]
+
+[tool.ruff.lint]
+ignore = ["E731", "E722"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["enochecker3"]
+exclude = []
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-s -rP"
+testpaths = [
+    "tests"
+]
