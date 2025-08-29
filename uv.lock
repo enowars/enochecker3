@@ -174,7 +174,7 @@ dependencies = [
 [[package]]
 name = "enochecker-core"
 version = "0.11.0"
-source = { editable = "lib/enochecker-core" }
+source = { editable = "lib/.enochecker-core" }
 dependencies = [
     { name = "pydantic" },
 ]
@@ -201,7 +201,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "enochecker-core", version = "0.11.0", source = { editable = "lib/enochecker-core" } },
+    { name = "enochecker-core", version = "0.11.0", source = { editable = "lib/.enochecker-core" } },
 ]
 
 [package.dev-dependencies]
@@ -225,7 +225,7 @@ typing = [
 
 [package.metadata]
 requires-dist = [
-    { name = "enochecker-core", marker = "extra == 'dev'", editable = "lib/enochecker-core" },
+    { name = "enochecker-core", marker = "extra == 'dev'", editable = "lib/.enochecker-core" },
     { name = "fastapi", specifier = ">=0.115.6,<0.116.0" },
     { name = "gunicorn", specifier = "==23.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },
