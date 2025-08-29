@@ -64,12 +64,6 @@ testpaths = [
 	"tests"
 ]
 
-[tool.uv.sources]
-enochecker-core = [
-	{ git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.11.1", group = "prod" },
-	{ path = "lib/enochecker-core", editable = true, extra = "dev" }
-]
-
 [tool.uv]
 default-groups = ["prod"]
 conflicts = [
@@ -78,3 +72,11 @@ conflicts = [
 		{ extra = "dev" }
 	],
 ]
+
+[tool.uv.sources]
+enochecker-core = [
+	{ git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.11.1", group = "prod" },
+	{ path = "lib/.enochecker-core", editable = true, extra = "dev" }
+]
+
+
