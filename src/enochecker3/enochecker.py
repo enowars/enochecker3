@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import traceback
+from random import Random
 from contextlib import AsyncExitStack
 from inspect import Parameter, isawaitable, signature
 from types import TracebackType
@@ -141,6 +142,7 @@ class Enochecker:
         self.register_dependency(self._get_flag_searcher)
         self.register_dependency(self._get_logger_adapter)
         self.register_dependency(self._get_async_socket)
+        self.register_dependency(self._get_random)
         self.register_dependency(self._get_dependency_injector)
 
         self._method_variants: Dict[CheckerMethod, Dict[int, Callable[..., Any]]] = {
@@ -445,6 +447,9 @@ class Enochecker:
         finally:
             conn[1].close()
             await conn[1].wait_closed()
+
+    def _get_random(self, task: BaseCheckerTaskMessage) -> Random:
+        return Random(task.task_id)
 
     def _get_dependency_injector(
         self, task: BaseCheckerTaskMessage
