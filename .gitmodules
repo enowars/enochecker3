@@ -1,3 +1,3 @@
 [submodule "lib/enochecker-core"]
 	path = lib/enochecker-core
-	url = git@github.com:attacking-lab/enochecker-core
+	url = https://github.com/attacking-lab/enochecker-core
