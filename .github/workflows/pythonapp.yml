@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
@@ -15,10 +16,14 @@ jobs:
     name: python test and build
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v2
+
+    - uses: attacking-lab/actions/.github/actions/github-credentials-store@main
+      with:
+        password: ${{ secrets.CI_PAT }}
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
