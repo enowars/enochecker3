@@ -34,4 +34,9 @@ test:
 sync:
 	@uv sync $(UV_FLAGS)
 
-.PHONY: all fix format format-fix lint lint-fix mypy test build dev sync
+dev:
+	@git update-index --assume-unchanged lib/enochecker-core/pyproject.toml
+	@rm -rf lib/enochecker-core
+	@git clone git@github.com:attacking-lab/enochecker-core lib/enochecker-core
+
+.PHONY: all fix format format-fix lint lint-fix mypy test build sync dev

@@ -165,16 +165,27 @@ wheels = [
 
 [[package]]
 name = "enochecker-core"
-version = "0.0.9999"
-source = { editable = "lib/enochecker-core" }
-
-[[package]]
-name = "enochecker-core"
 version = "0.11.0"
 source = { git = "https://github.com/attacking-lab/enochecker-core?rev=v0.11.1#5b5d705adbe9163f8c36c8aef09f4b2de229e9d2" }
 dependencies = [
     { name = "pydantic" },
 ]
+
+[[package]]
+name = "enochecker-core"
+version = "0.11.0"
+source = { editable = "lib/enochecker-core" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11.7" }]
+
+[package.metadata.requires-dev]
+format = [{ name = "ruff", specifier = ">=0.12.11" }]
+lint = [{ name = "ruff", specifier = ">=0.12.11" }]
+typing = [{ name = "mypy", specifier = ">=1.17.1" }]
 
 [[package]]
 name = "enochecker3"
@@ -190,7 +201,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "enochecker-core", version = "0.0.9999", source = { editable = "lib/enochecker-core" } },
+    { name = "enochecker-core", version = "0.11.0", source = { editable = "lib/enochecker-core" } },
 ]
 
 [package.dev-dependencies]
