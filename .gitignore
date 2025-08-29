@@ -13,4 +13,4 @@ build
 dist
 *.egg-info
 .coverage
-#lib
+lib/.enochecker-core
