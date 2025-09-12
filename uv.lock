@@ -189,7 +189,7 @@ typing = [{ name = "mypy", specifier = ">=1.17.1" }]
 
 [[package]]
 name = "enochecker3"
-version = "0.11.0"
+version = "0.11.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

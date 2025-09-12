@@ -369,12 +369,15 @@ class Enochecker:
     async def _call_exploit(
         self, task: ExploitCheckerTaskMessage
     ) -> CheckerResultMessage:
-        flag: Optional[str] = await self._call_method(task)
-        if not flag:
+        flag_text: str | None = await self._call_method(task)
+        flag_searcher = self._get_flag_searcher(task)
+        flag_bytes: bytes | None = flag_searcher.search_flag(flag_text or "")
+        if flag_bytes is None:
             return CheckerResultMessage(
-                result=CheckerTaskResult.MUMBLE, message="Flag not found"
+                result=CheckerTaskResult.MUMBLE, message="No flags found"
             )
-        return CheckerResultMessage(result=CheckerTaskResult.OK, flag=flag)
+        flag_text = flag_bytes.decode(errors="replace")
+        return CheckerResultMessage(result=CheckerTaskResult.OK, flag=flag_text)
 
     ########################
     # Dependency Injection #

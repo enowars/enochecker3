@@ -38,8 +38,14 @@ class FlagSearcher:
     def search_flag(self, haystack: Union[str, bytes]) -> Optional[bytes]:
         if type(haystack) is str:
             haystack = haystack.encode()
+        candidates = []
         for flag in self._flag_re.findall(haystack):
-            hash_ = hashlib.sha256(flag).hexdigest()
-            if hash_ == self.flag_hash:
-                return flag
-        return None
+            if self.flag_hash != "":
+                hash_ = hashlib.sha256(flag).hexdigest()
+                if hash_ == self.flag_hash:
+                    return flag
+            candidates.append(flag)
+        if self.flag_hash != "" or len(candidates) == 0:
+            return None
+        else:
+            return b"\n".join(candidates)
