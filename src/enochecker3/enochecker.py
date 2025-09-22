@@ -306,6 +306,12 @@ class Enochecker:
         async with AsyncExitStack() as stack:
             args = await self._inject_dependencies(task, f, stack)
             res = await f(*args)
+
+        if res is not None and not isinstance(res, str):
+            raise InternalErrorException(
+                f"{task.method} method returned non-string object"
+            )
+
         return res
 
     async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str]:
