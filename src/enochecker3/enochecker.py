@@ -293,7 +293,7 @@ class Enochecker:
             new_args.append(await stack.enter_async_context(arg))
         return new_args
 
-    async def _call_method_raw(self, task: BaseCheckerTaskMessage) -> Optional[str]:
+    async def _call_method_raw(self, task: BaseCheckerTaskMessage) -> Optional[str | bytes]:
         variant_id = task.variant_id
         method = task.method
         try:
@@ -307,14 +307,14 @@ class Enochecker:
             args = await self._inject_dependencies(task, f, stack)
             res = await f(*args)
 
-        if res is not None and not isinstance(res, str):
+        if res is not None and not isinstance(res, str) and not isinstance(res, bytes):
             raise InternalErrorException(
                 f"{task.method} method returned non-string object"
             )
 
         return res
 
-    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str]:
+    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str | bytes]:
         try:
             return await asyncio.wait_for(
                 self._call_method_raw(task),
@@ -356,7 +356,8 @@ class Enochecker:
     async def _call_putflag(
         self, task: PutflagCheckerTaskMessage
     ) -> CheckerResultMessage:
-        attack_info: Optional[str] = await self._call_method(task)
+        attack_info: Optional[str | bytes] = await self._call_method(task)
+        assert isinstance(attack_info, str) 
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
@@ -386,7 +387,7 @@ class Enochecker:
     async def _call_exploit(
         self, task: ExploitCheckerTaskMessage
     ) -> CheckerResultMessage:
-        flag_text: str | None = await self._call_method(task)
+        flag_text: str | bytes | None = await self._call_method(task)
         flag_searcher = self._get_flag_searcher(task)
         flag_bytes: bytes | None = flag_searcher.search_flag(flag_text or "")
         if flag_bytes is None:
