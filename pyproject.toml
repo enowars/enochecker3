@@ -1,6 +1,6 @@
 [project]
 name = "enochecker3"
-version = "0.11.4"
+version = "0.13.0"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
 	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
@@ -75,7 +75,7 @@ conflicts = [
 
 [tool.uv.sources]
 enochecker-core = [
-	{ git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.11.1", group = "prod" },
+	{ git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0", group = "prod" },
 	{ path = "lib/.enochecker-core", editable = true, extra = "dev" }
 ]
 
