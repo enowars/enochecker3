@@ -316,22 +316,27 @@ class Enochecker:
             )
         except (MumbleException, OfflineException, InternalErrorException):
             raise
-        except asyncio.IncompleteReadError:
+        except (httpx.ConnectError, httpx.ConnectTimeout):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.error(f"Service connection closed abruptly\n{trace}")
-            raise MumbleException("Service connection closed abruptly")
-        except asyncio.TimeoutError:
+            logger.info(f"Connection to service failed\n{trace}")
+            raise OfflineException("Connection to service failed")
+        except (EOFError, httpx.ReadError, httpx.WriteError):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
-            logger.error(f"Service is responding too slow\n{trace}")
-            raise MumbleException("Service is responding too slow")
-        except (
-            httpx.ConnectTimeout,
-            httpx.ConnectError,
-            httpx.ReadTimeout,
-            httpx.RemoteProtocolError,
-        ):
+            logger.error(f"Connection to service closed abruptly\n{trace}")
+            raise MumbleException("Closed to service closed abruptly")
+        except (TimeoutError, httpx.TimeoutException):
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.error(f"Service responding too slow\n{trace}")
+            raise MumbleException("Service responding too slow")
+        except (ConnectionResetError, httpx.CloseError):
+            trace = traceback.format_exc()
+            logger = self._get_logger_adapter(task)
+            logger.error(f"Connection reset by service\n{trace}")
+            raise MumbleException("Connection reset by services")
+        except (httpx.RemoteProtocolError, httpx.DecodingError):
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"HTTP connection to service failed\n{trace}")
