@@ -74,6 +74,10 @@ class ExploitCheckerTaskMessage(BaseCheckerTaskMessage):
     method = CheckerMethod.EXPLOIT
 
 
+class TestCheckerTaskMessage(BaseCheckerTaskMessage):
+    method = CheckerMethod.TEST
+
+
 class BaseException(Exception):
     def __init__(self, message: Optional[str], log_message: Optional[str] = None):
         self.message: Optional[str] = message

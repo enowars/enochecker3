@@ -50,6 +50,7 @@ from .types import (
     OfflineException,
     PutflagCheckerTaskMessage,
     PutnoiseCheckerTaskMessage,
+    TestCheckerTaskMessage,
 )
 
 METHOD_TO_TASK_MESSAGE_MAPPING = {
@@ -59,6 +60,7 @@ METHOD_TO_TASK_MESSAGE_MAPPING = {
     CheckerMethod.GETNOISE: GetnoiseCheckerTaskMessage,
     CheckerMethod.HAVOC: HavocCheckerTaskMessage,
     CheckerMethod.EXPLOIT: ExploitCheckerTaskMessage,
+    CheckerMethod.TEST: TestCheckerTaskMessage,
 }
 
 TIMEOUT_BUFFER = 2
@@ -152,6 +154,7 @@ class Enochecker:
             CheckerMethod.GETNOISE: {},
             CheckerMethod.HAVOC: {},
             CheckerMethod.EXPLOIT: {},
+            CheckerMethod.TEST: {},
         }
 
     async def _init(self) -> None:
@@ -230,6 +233,9 @@ class Enochecker:
 
     def exploit(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
         return self._define_method(CheckerMethod.EXPLOIT, *variant_ids)
+
+    def test(self, *variant_ids: int) -> Callable[[Callable[..., Any]], None]:
+        return self._define_method(CheckerMethod.TEST, *variant_ids)
 
     def resolve_injector(self, name: str, t: type) -> Callable[..., Any]:
         key: Tuple[str, type] = (name.split("_", 1)[0], t)
@@ -379,6 +385,10 @@ class Enochecker:
         flag_text = flag_bytes.decode(errors="replace")
         return CheckerResultMessage(result=CheckerTaskResult.OK, flag=flag_text)
 
+    async def _call_test(self, task: TestCheckerTaskMessage) -> CheckerResultMessage:
+        await self._call_method(task)
+        return CheckerResultMessage(result=CheckerTaskResult.OK)
+
     ########################
     # Dependency Injection #
     ########################
@@ -463,7 +473,7 @@ class Enochecker:
     # variant_id validation #
     #########################
 
-    def _validate_variant_ids(self) -> Tuple[int, int, int, int]:
+    def _validate_variant_ids(self) -> Tuple[int, int, int, int, int]:
         if env := os.environ.get("ENOCHECKER_FLAG_VARIANTS"):
             flag_variants = int(env)
         else:
@@ -496,10 +506,21 @@ class Enochecker:
         else:
             exploit_variants = len(self._method_variants[CheckerMethod.EXPLOIT])
 
+        if env := os.environ.get("ENOCHECKER_TEST_VARIANTS"):
+            test_variants = int(env)
+        else:
+            test_variants = len(self._method_variants[CheckerMethod.TEST])
+
         for method in self._method_variants.keys():
             self._ensure_sequential_variant_ids(method)
 
-        return (flag_variants, noise_variants, havoc_variants, exploit_variants)
+        return (
+            flag_variants,
+            noise_variants,
+            havoc_variants,
+            exploit_variants,
+            test_variants,
+        )
 
     def _ensure_sequential_variant_ids(self, method: CheckerMethod) -> None:
         keys = sorted(list(self._method_variants[method].keys()))
@@ -515,6 +536,7 @@ class Enochecker:
             noise_variants,
             havoc_variants,
             exploit_variants,
+            test_variants,
         ) = self._validate_variant_ids()
 
         return CheckerInfoMessage(
@@ -523,6 +545,7 @@ class Enochecker:
             noise_variants=noise_variants,
             havoc_variants=havoc_variants,
             exploit_variants=exploit_variants,
+            test_variants=test_variants,
         )
 
     ###########
@@ -574,6 +597,8 @@ class Enochecker:
                     return await self._call_exploit(
                         cast(ExploitCheckerTaskMessage, _task)
                     )
+                elif task.method == CheckerMethod.TEST:
+                    return await self._call_test(cast(TestCheckerTaskMessage, _task))
                 else:
                     return CheckerResultMessage(  # type: ignore
                         result=CheckerTaskResult.INTERNAL_ERROR,
