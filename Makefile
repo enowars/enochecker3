@@ -1,6 +1,9 @@
-UV_FLAGS ?= --exact --no-group prod --group dev --all-extras $(UV_FLAGS_EXTRA)
-UV_RUN ?= env VIRTUAL_ENV=.venv uv run $(UV_FLAGS)
+ifneq (,$(wildcard .makevars))
+	include .makevars
+endif
 
+UV_FLAGS ?= ${UV_FLAGS:- --inexact}
+UV_RUN ?= env VIRTUAL_ENV=.venv uv run $(UV_FLAGS)
 
 TEST_FLAGS ?=
 
@@ -39,5 +42,9 @@ dev:
 	@rm -rf lib/.enochecker-core
 	@ln -s enochecker-core lib/.enochecker-core
 	@git submodule update --init --recursive lib/enochecker-core
+	@echo "UV_FLAGS=--exact --no-group prod --group dev --all-extras $${UV_FLAGS_EXTRA}" > .makevars
+
+prod:
+	@rm .makevars
 
 .PHONY: all fix format format-fix lint lint-fix mypy test build sync dev

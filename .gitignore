@@ -14,3 +14,4 @@ dist
 *.egg-info
 .coverage
 lib/.enochecker-core
+.makevars
