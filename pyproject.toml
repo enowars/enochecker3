@@ -1,6 +1,6 @@
 [project]
 name = "enochecker3"
-version = "0.13.0"
+version = "0.13.1"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
 	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
