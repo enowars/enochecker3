@@ -293,7 +293,9 @@ class Enochecker:
             new_args.append(await stack.enter_async_context(arg))
         return new_args
 
-    async def _call_method_raw(self, task: BaseCheckerTaskMessage) -> Optional[str | bytes]:
+    async def _call_method_raw(
+        self, task: BaseCheckerTaskMessage
+    ) -> Optional[str | bytes]:
         variant_id = task.variant_id
         method = task.method
         try:
@@ -357,7 +359,7 @@ class Enochecker:
         self, task: PutflagCheckerTaskMessage
     ) -> CheckerResultMessage:
         attack_info: Optional[str | bytes] = await self._call_method(task)
-        assert isinstance(attack_info, str) 
+        assert isinstance(attack_info, str)
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
