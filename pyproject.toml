@@ -1,6 +1,6 @@
 [project]
 name = "enochecker3"
-version = "0.13.3"
+version = "0.13.4"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
 	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
@@ -14,32 +14,16 @@ dependencies = [
 	"httpx>=0.28.0,<0.29.0",
 	"motor>=3.6.1,<4.0.0",
 	"uvicorn>=0.34.0,<0.35.0",
+	"enochecker-core"
 ]
 
 [dependency-groups]
 dev = [
-]
-prod = [
-	"enochecker-core",
-]
-format = [
 	"ruff>=0.12.10",
-]
-lint = [
-	"ruff>=0.12.10",
-]
-test = [
 	"coverage>=7.10.5",
 	"pytest>=8.4.1",
 	"pytest-asyncio>=1.1.0",
-]
-typing = [
 	"mypy>=1.17.1",
-]
-
-[project.optional-dependencies]
-dev = [
-	"enochecker-core"
 ]
 
 [tool.ruff.lint]
@@ -64,19 +48,5 @@ testpaths = [
 	"tests"
 ]
 
-[tool.uv]
-default-groups = ["prod"]
-conflicts = [
-	[
-		{ group = "prod" },
-		{ extra = "dev" }
-	],
-]
-
 [tool.uv.sources]
-enochecker-core = [
-	{ git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0", group = "prod" },
-	{ path = "lib/.enochecker-core", editable = true, extra = "dev" }
-]
-
-
+enochecker-core = { git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0" }
