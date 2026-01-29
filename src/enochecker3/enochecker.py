@@ -152,9 +152,6 @@ class Enochecker:
         self.checker_name: str = service_name + "Checker"
 
         # Dependency injection registry: Maps (name_prefix, return_type) -> injector_function
-        # This allows automatic injection of dependencies into checker methods based on
-        # their parameter types. For example, a parameter `http_client: httpx.AsyncClient`
-        # will automatically be injected by calling self._get_http_client()
         self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
 
@@ -357,46 +354,47 @@ class Enochecker:
             # Check if this parameter wants the task message itself
             try:
                 subclass = issubclass(task_message_type, v.annotation)
+                if subclass:
+                    # This parameter wants the task message - inject it directly
+                    args.append(task)
+                    continue
             except TypeError:
                 # Subscripted generics (e.g., Tuple[...]) can't be used in issubclass
-                subclass = False
+                pass
 
-            if subclass:
-                # This parameter wants the task message - inject it directly
-                args.append(task)
-            else:
-                # This parameter wants a dependency - resolve and inject it
-                injector = self.resolve_injector(v.name, v.annotation)
+            # This parameter wants a dependency - resolve and inject it
+            injector = self.resolve_injector(v.name, v.annotation)
 
-                # Circular dependency detection: if this injector is already being
-                # resolved higher up in the call stack, we have a circular dependency
-                if injector in dependencies:
-                    raise CircularDependencyException(
-                        f"Detected circular dependency in {f} with injected type {v.annotation}"
-                    )
-                else:
-                    # Recursively inject dependencies for the injector itself
-                    # (e.g., _get_async_socket needs a logger, which needs a task)
-                    args_ = await self._inject_dependencies(
-                        task, injector, stack, dependencies.union([injector])
-                    )
-                    # Call the injector with its dependencies to get the actual dependency instance
-                    arg = injector(*args_)
-                    if isawaitable(arg):
-                        arg = await arg
-                    args.append(arg)
+            # Circular dependency detection: if this injector is already being
+            # resolved higher up in the call stack, we have a circular dependency
+            if injector in dependencies:
+                raise CircularDependencyException(
+                    f"Detected circular dependency in {f} with injected type {v.annotation}"
+                )
+
+            # Recursively inject dependencies for the injector itself
+            # (e.g., _get_async_socket needs a logger, which needs a task)
+            args_ = await self._inject_dependencies(
+                task, injector, stack, dependencies.union([injector])
+            )
+            # Call the injector with its dependencies to get the actual dependency instance
+            arg = injector(*args_)
+            if isawaitable(arg):
+                arg = await arg
+            args.append(arg)
 
         # Handle async context managers: enter them and let the exit stack manage cleanup
         # This ensures resources like sockets and HTTP clients are properly closed
         # new_args contains the return values of __aenter__, which is the "x" in "async with ... as x:"
         new_args = []
         for arg in args:
-            if not hasattr(arg, "__enter__") and not hasattr(arg, "__aenter__"):
+            if hasattr(arg, "__enter__") or hasattr(arg, "__aenter__"):
+                # Enter the async context manager and let the stack manage its cleanup
+                new_args.append(await stack.enter_async_context(arg))
+            else:
                 # Not a context manager - use as-is
                 new_args.append(arg)
-                continue
-            # Enter the async context manager and let the stack manage its cleanup
-            new_args.append(await stack.enter_async_context(arg))
+
         return new_args
 
     async def _call_method_raw(
