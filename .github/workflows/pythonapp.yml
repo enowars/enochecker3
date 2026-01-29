@@ -16,10 +16,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - uses: attacking-lab/actions/.github/actions/github-credentials-store@main
-      with:
-        password: ${{ secrets.CI_PAT }}
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
