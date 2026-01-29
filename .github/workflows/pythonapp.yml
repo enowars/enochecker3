@@ -2,16 +2,12 @@ name: Python package
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: arc-runner-dink
+    runs-on: ubuntu-latest
     name: python test and build
     strategy:
       matrix:
