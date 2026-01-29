@@ -162,19 +162,9 @@ wheels = [
 [[package]]
 name = "enochecker-core"
 version = "0.13.0"
-source = { directory = "../enochecker_core" }
+source = { git = "https://github.com/enowars/enochecker_core?rev=make_flag_optional#caf07770b75d3a35d896fed9d2970536b29fe5f7" }
 dependencies = [
     { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.11.7" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.17.1" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "ruff", specifier = ">=0.12.11" },
 ]
 
 [[package]]
@@ -201,7 +191,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "enochecker-core", directory = "../enochecker_core" },
+    { name = "enochecker-core", git = "https://github.com/enowars/enochecker_core?rev=make_flag_optional" },
     { name = "fastapi", specifier = ">=0.115.6,<0.116.0" },
     { name = "gunicorn", specifier = "==23.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },
