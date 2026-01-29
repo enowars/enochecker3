@@ -75,6 +75,7 @@ class ExploitCheckerTaskMessage(BaseCheckerTaskMessage):
 
 
 class TestCheckerTaskMessage(BaseCheckerTaskMessage):
+    __test__ = False  # Tell pytest not to collect this as a test class
     method = CheckerMethod.TEST
 
 

@@ -1,11 +1,11 @@
 from typing import Any, Optional
 
-from motor.core import AgnosticCollection
+from pymongo.asynchronous.collection import AsyncCollection
 
 
 class ChainDB:
-    def __init__(self, collection: AgnosticCollection, task_chain_id: str):
-        self.collection: AgnosticCollection = collection
+    def __init__(self, collection: AsyncCollection, task_chain_id: str):
+        self.collection: AsyncCollection = collection
         self.task_chain_id: str = task_chain_id
 
     async def get(self, key: str) -> Any:
