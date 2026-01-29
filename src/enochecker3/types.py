@@ -7,76 +7,50 @@ __all__ = [
     "EnoLogMessage",
 ]
 
-from typing import ClassVar, Optional
+from typing import Literal, Optional
 
 from enochecker_core import (
-    BaseModel,
-    CheckerMethod,
-    CheckerTaskResult,
-    CheckerTaskMessage,
     CheckerInfoMessage,
+    CheckerMethod,
     CheckerResultMessage,
+    CheckerTaskMessage,
+    CheckerTaskResult,
     EnoLogMessage,
 )
 
 
-class BaseCheckerTaskMessage(BaseModel):
-    task_id: int
-    address: str
-    team_id: int
-    team_name: str
-    current_round_id: int
-    variant_id: int
-    timeout: int
-    round_length: int
-    task_chain_id: str
-
-    method: ClassVar[CheckerMethod]
-
-
-class FlagCheckerTaskMessage(BaseCheckerTaskMessage):
+class PutflagCheckerTaskMessage(CheckerTaskMessage):
     flag: str
+    method: Literal[CheckerMethod.PUTFLAG] = CheckerMethod.PUTFLAG
 
 
-class PutflagCheckerTaskMessage(FlagCheckerTaskMessage):
-    method = CheckerMethod.PUTFLAG
+class GetflagCheckerTaskMessage(CheckerTaskMessage):
+    flag: str
+    method: Literal[CheckerMethod.GETFLAG] = CheckerMethod.GETFLAG
 
 
-class GetflagCheckerTaskMessage(FlagCheckerTaskMessage):
-    related_round_id: int
-
-    method = CheckerMethod.GETFLAG
+class PutnoiseCheckerTaskMessage(CheckerTaskMessage):
+    method: Literal[CheckerMethod.PUTNOISE] = CheckerMethod.PUTNOISE
 
 
-class NoiseCheckerTaskMessage(BaseCheckerTaskMessage):
-    pass
+class GetnoiseCheckerTaskMessage(CheckerTaskMessage):
+    method: Literal[CheckerMethod.GETNOISE] = CheckerMethod.GETNOISE
 
 
-class PutnoiseCheckerTaskMessage(NoiseCheckerTaskMessage):
-    method = CheckerMethod.PUTNOISE
+class HavocCheckerTaskMessage(CheckerTaskMessage):
+    method: Literal[CheckerMethod.HAVOC] = CheckerMethod.HAVOC
 
 
-class GetnoiseCheckerTaskMessage(NoiseCheckerTaskMessage):
-    related_round_id: int
-
-    method = CheckerMethod.GETNOISE
-
-
-class HavocCheckerTaskMessage(BaseCheckerTaskMessage):
-    method = CheckerMethod.HAVOC
-
-
-class ExploitCheckerTaskMessage(BaseCheckerTaskMessage):
+class ExploitCheckerTaskMessage(CheckerTaskMessage):
     flag_regex: str
     flag_hash: str
     attack_info: Optional[str]
+    method: Literal[CheckerMethod.EXPLOIT] = CheckerMethod.EXPLOIT
 
-    method = CheckerMethod.EXPLOIT
 
-
-class TestCheckerTaskMessage(BaseCheckerTaskMessage):
+class TestCheckerTaskMessage(CheckerTaskMessage):
     __test__ = False  # Tell pytest not to collect this as a test class
-    method = CheckerMethod.TEST
+    method: Literal[CheckerMethod.TEST] = CheckerMethod.TEST
 
 
 class BaseException(Exception):

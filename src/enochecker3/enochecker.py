@@ -36,7 +36,6 @@ from enochecker3.utils import FlagSearcher
 
 from .chaindb import ChainDB
 from .types import (
-    BaseCheckerTaskMessage,
     CheckerInfoMessage,
     CheckerMethod,
     CheckerResultMessage,
@@ -96,7 +95,7 @@ class DependencyInjector:
                 http_client = await injector.get(httpx.AsyncClient)
     """
 
-    def __init__(self, checker: "Enochecker", task: BaseCheckerTaskMessage):
+    def __init__(self, checker: "Enochecker", task: CheckerTaskMessage):
         self.checker = checker
         self.task = task
         # AsyncExitStack manages cleanup of async context managers (like sockets, clients)
@@ -139,9 +138,9 @@ class DependencyInjector:
             res = await res
 
         # If the result is a context manager, enter it and manage its lifecycle
-        if not hasattr(res, "__enter__") and not hasattr(res, "__aenter__"):
-            return res
-        return await self._exit_stack.enter_async_context(res)
+        if hasattr(res, "__enter__") or hasattr(res, "__aenter__"):
+            return await self._exit_stack.enter_async_context(res)
+        return res
 
 
 class Enochecker:
@@ -310,7 +309,7 @@ class Enochecker:
 
     async def _inject_dependencies(
         self,
-        task: BaseCheckerTaskMessage,
+        task: CheckerTaskMessage,
         f: Callable[..., Any],
         stack: AsyncExitStack,
         dependencies: Optional[Set[Callable[..., Any]]] = None,
@@ -398,9 +397,7 @@ class Enochecker:
 
         return new_args
 
-    async def _call_method_raw(
-        self, task: BaseCheckerTaskMessage
-    ) -> Optional[str | bytes]:
+    async def _call_method_raw(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         variant_id = task.variant_id
         method = task.method
         try:
@@ -421,7 +418,7 @@ class Enochecker:
 
         return res
 
-    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str | bytes]:
+    async def _call_method(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         try:
             return await asyncio.wait_for(
                 self._call_method_raw(task),
@@ -593,7 +590,7 @@ class Enochecker:
     # Built-in dependency providers - these are automatically registered and can be
     # injected into any checker method by declaring them as parameters
 
-    def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
+    def _get_http_client(self, task: CheckerTaskMessage) -> httpx.AsyncClient:
         """
         Provide an HTTP client configured for the service being checked.
 
@@ -607,7 +604,7 @@ class Enochecker:
             base_url=f"http://{task.address}:{self.service_port}", verify=False
         )
 
-    def _get_chaindb(self, task: BaseCheckerTaskMessage) -> ChainDB:
+    def _get_chaindb(self, task: CheckerTaskMessage) -> ChainDB:
         """
         Provide a ChainDB instance for persistent storage across checker rounds.
 
@@ -618,7 +615,7 @@ class Enochecker:
         """
         return ChainDB(self._chain_collection, task.task_chain_id)
 
-    def _get_motor_collection(self, task: BaseCheckerTaskMessage) -> AsyncCollection:
+    def _get_motor_collection(self, task: CheckerTaskMessage) -> AsyncCollection:
         """
         Provide a MongoDB collection scoped to the current team.
 
@@ -629,7 +626,7 @@ class Enochecker:
         """
         return self._mongodb[f"team_{task.team_id}"]
 
-    def _get_motor_database(self, task: BaseCheckerTaskMessage) -> AsyncDatabase:
+    def _get_motor_database(self, task: CheckerTaskMessage) -> AsyncDatabase:
         """
         Provide the MongoDB database instance for this checker.
 
@@ -651,9 +648,7 @@ class Enochecker:
         """
         return FlagSearcher(task.flag_regex, task.flag_hash)
 
-    def _get_logger_adapter(
-        self, task: BaseCheckerTaskMessage
-    ) -> logging.LoggerAdapter:
+    def _get_logger_adapter(self, task: CheckerTaskMessage) -> logging.LoggerAdapter:
         """
         Provide a logger with task context automatically included.
 
@@ -673,7 +668,7 @@ class Enochecker:
 
     @contextlib.asynccontextmanager
     async def _get_async_socket(
-        self, task: BaseCheckerTaskMessage, logger: logging.LoggerAdapter
+        self, task: CheckerTaskMessage, logger: logging.LoggerAdapter
     ) -> AsyncSocket:
         """
         Provide a raw TCP socket connection to the service.
@@ -704,7 +699,7 @@ class Enochecker:
             conn[1].close()
             await conn[1].wait_closed()
 
-    def _get_random(self, task: BaseCheckerTaskMessage) -> Random:
+    def _get_random(self, task: CheckerTaskMessage) -> Random:
         """
         Provide a seeded random number generator for deterministic randomness.
 
@@ -724,9 +719,7 @@ class Enochecker:
         """
         return Random(task.task_id)
 
-    def _get_dependency_injector(
-        self, task: BaseCheckerTaskMessage
-    ) -> DependencyInjector:
+    def _get_dependency_injector(self, task: CheckerTaskMessage) -> DependencyInjector:
         """
         Provide a DependencyInjector for runtime dependency resolution.
 
@@ -846,7 +839,7 @@ class Enochecker:
         @app.post("/", response_model=CheckerResultMessage)
         async def checker(task: CheckerTaskMessage) -> CheckerResultMessage:
             cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
-            _task = cls(**task.dict())
+            _task = cls(**task.model_dump())
             logger = self._get_logger_adapter(_task)
             logger.debug(f"Received new checker task with payload: {_task}")
             try:

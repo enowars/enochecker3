@@ -162,9 +162,19 @@ wheels = [
 [[package]]
 name = "enochecker-core"
 version = "0.13.0"
-source = { git = "https://github.com/attacking-lab/enochecker-core?rev=v0.13.0#da20abe0973a5596d21a2e725263b07078cf2ff8" }
+source = { directory = "../enochecker_core" }
 dependencies = [
     { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11.7" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.17.1" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "ruff", specifier = ">=0.12.11" },
 ]
 
 [[package]]
@@ -191,7 +201,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "enochecker-core", git = "https://github.com/attacking-lab/enochecker-core?rev=v0.13.0" },
+    { name = "enochecker-core", directory = "../enochecker_core" },
     { name = "fastapi", specifier = ">=0.115.6,<0.116.0" },
     { name = "gunicorn", specifier = "==23.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },

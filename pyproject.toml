@@ -49,4 +49,5 @@ testpaths = [
 ]
 
 [tool.uv.sources]
-enochecker-core = { git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0" }
+#enochecker-core = { git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0" }
+enochecker-core = { path = "/home/lucas/Documents/prog/enochecker_core" }
