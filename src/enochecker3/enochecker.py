@@ -383,13 +383,14 @@ class Enochecker:
                 arg = await arg
             args.append(arg)
 
-        # Handle async context managers: enter them and let the exit stack manage cleanup
+        # Handle (async) context managers: enter them and let the exit stack manage cleanup
         # This ensures resources like sockets and HTTP clients are properly closed
         # new_args contains the return values of __aenter__, which is the "x" in "async with ... as x:"
         new_args = []
         for arg in args:
             if hasattr(arg, "__enter__") or hasattr(arg, "__aenter__"):
-                # Enter the async context manager and let the stack manage its cleanup
+                # Enter the (async) context manager and let the stack manage its cleanup
+                # note that enter_async_context also works with non-async contexts
                 new_args.append(await stack.enter_async_context(arg))
             else:
                 # Not a context manager - use as-is
@@ -713,10 +714,6 @@ class Enochecker:
         the same "random" values. This enables reproducible fuzzing/testing: when a
         checker fails with specific random inputs, you can use the task_id from logs
         to reproduce the exact same random sequence for debugging.
-
-        IMPORTANT: Never use this for generating passwords, tokens, session IDs, or any
-        security-sensitive values. Use secrets.token_hex(), secrets.token_bytes(), or
-        similar cryptographically secure methods instead.
 
         NOTE: Do NOT use this for exploit methods. Players don't have access to the
         checker's internal random state. Use attack_info (the return value from putflag)
