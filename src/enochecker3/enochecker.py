@@ -199,6 +199,7 @@ class Enochecker:
     @contextlib.asynccontextmanager
     async def _lifespan(self, app: FastAPI) -> AsyncIterator[None]:
         setup_telemetry(self.checker_name)
+        await self._init()
         yield
 
     def _define_method(
@@ -668,8 +669,6 @@ class Enochecker:
                     return CheckerResultMessage(
                         result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
                     )
-
-        app.on_event("startup")(self._init)
 
         FastAPIInstrumentor().instrument_app(app)
 

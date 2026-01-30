@@ -12,13 +12,13 @@ with telemetry_attributes({"name": "abc"}):
 
 
 class OpenTelemetryCommonAttributes:
-    def __init__(self, attributes: Mapping[str, str | int] | None = None) -> None:
-        self._attributes: dict[str, str | int] = dict(attributes.items()) if attributes else {}
+    def __init__(self, attributes: Mapping[str, Any] | None = None) -> None:
+        self._attributes: dict[str, Any] = dict(attributes.items()) if attributes else {}
 
-    def create_child(self, new_attributes: dict[str, str | int]) -> 'OpenTelemetryCommonAttributes':
+    def create_child(self, new_attributes: dict[str, Any]) -> 'OpenTelemetryCommonAttributes':
         return OpenTelemetryCommonAttributes(self.to_dict() | new_attributes)
 
-    def to_dict(self) -> dict[str, str | int]:
+    def to_dict(self) -> dict[str, Any]:
         return {k: str(v) for k, v in self._attributes.items()}
 
 
@@ -48,5 +48,5 @@ class OpenTelemetryCommonAttributesContext:
         self._stack.set(self._stack.get()[:-1])
 
 
-def telemetry_attributes(d: Mapping[str, str | int]) -> OpenTelemetryCommonAttributesContext:
+def telemetry_attributes(d: Mapping[str, Any]) -> OpenTelemetryCommonAttributesContext:
     return OpenTelemetryCommonAttributesContext(OpenTelemetryCommonAttributes(d))
