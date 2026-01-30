@@ -34,7 +34,12 @@ from opentelemetry.trace import get_current_span
 
 from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
-from enochecker3.telemetry import SaarctfTracer, instrument_httpx_without_propagation, CommonAttributesLogFilter
+from enochecker3.telemetry import (
+    SaarctfTracer,
+    instrument_httpx_without_propagation,
+    CommonAttributesLogFilter,
+    setup_telemetry
+)
 from enochecker3.telemetry_attributes import telemetry_attributes
 
 from .chaindb import ChainDB
@@ -190,6 +195,11 @@ class Enochecker:
             name="task_chain_index",
             unique=True,
         )
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(self, app: FastAPI) -> AsyncIterator[None]:
+        setup_telemetry(self.checker_name)
+        yield
 
     def _define_method(
         self,
@@ -575,7 +585,7 @@ class Enochecker:
 
     @property
     def app(self) -> FastAPI:
-        app = FastAPI()
+        app = FastAPI(lifespan=self._lifespan)
 
         try:
             service_info = self.get_service_info()
