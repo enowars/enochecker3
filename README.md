@@ -4,7 +4,7 @@ A FastAPI based checker library for writing async checkers in python. It is call
 
 ## Quick Start
 
-Getting started is really easy. Simply install `enochecker3` using
+Install `enochecker3` using
 ```
 pip3 install enochecker3
 ```
@@ -75,7 +75,7 @@ And browse to (http://localhost:8000/docs) to explore the web interface, which a
 
 ## Built-In Dependencies
 
-Enochecker3 provides powerful dependency injection that automatically provides common resources to your checker methods. Simply declare them as parameters with the correct type annotation, and they'll be injected automatically.
+Enochecker3 uses dependency injection to provide common resources to your checker methods. Declare a parameter with the correct type annotation and it will be injected automatically.
 
 ### HTTP Client (`httpx.AsyncClient`)
 
@@ -97,7 +97,7 @@ async def putflag_web(task: PutflagCheckerTaskMessage, client: AsyncClient) -> s
         raise MumbleException("Failed to create document")
 
     doc_id = response.json()["id"]
-    return doc_id  # Return as attack_info for getflag
+    return doc_id  # Returned as attack_info (public, available to all players)
 ```
 
 **Details**:
@@ -123,6 +123,7 @@ async def putflag_with_storage(
     password = secrets.token_hex(16)
 
     # Store PRIVATE data in ChainDB (only checker can access)
+    await db.set("username", username)
     await db.set("password", password)
 
     # Register and store flag
@@ -142,17 +143,20 @@ async def getflag_with_retrieval(
     client: AsyncClient,
     db: ChainDB
 ) -> None:
-    # Get PUBLIC targeting info from attack_info
-    username = task.attack_info  # Returned from putflag
+    # Retrieve credentials from ChainDB
+    try:
+        username = await db.get("username")
+        password = await db.get("password")
+    except KeyError:
+        raise MumbleException("Missing credentials in ChainDB")
 
-    # Get PRIVATE data from ChainDB
-    password = await db.get("password")  # Only checker knows this
-
-    # Login and verify flag
-    response = await client.post("/login", json={
+    # Login and retrieve flag from profile
+    login = await client.post("/login", json={
         "username": username,
         "password": password
     })
+    assert_equals(login.status_code, 200, "Login failed")
+    response = await client.get(f"/user/{username}/bio")
     assert_in(task.flag, response.text)
 ```
 
@@ -171,6 +175,8 @@ async def getflag_with_retrieval(
 **Usage**:
 ```python
 from pymongo.asynchronous.collection import AsyncCollection
+from enochecker3 import PutnoiseCheckerTaskMessage
+from httpx import AsyncClient
 
 @checker.putnoise(0)
 async def putnoise_with_mongo(
@@ -205,23 +211,22 @@ async def putnoise_with_mongo(
 **Usage**:
 ```python
 from pymongo.asynchronous.database import AsyncDatabase
+from enochecker3 import HavocCheckerTaskMessage
 
 @checker.havoc(0)
-async def havoc_cleanup(
+async def havoc_with_database(
     task: HavocCheckerTaskMessage,
     database: AsyncDatabase
 ) -> None:
-    # Access different collections
+    # Access different collections within the checker's database
     users_collection = database["users"]
     sessions_collection = database["sessions"]
 
-    # Clean up old data
-    await users_collection.delete_many({
-        "round": {"$lt": task.current_round_id - 10}
-    })
-    await sessions_collection.delete_many({
-        "expired": True
-    })
+    # Run queries across collections
+    user_count = await users_collection.count_documents({"team_id": task.team_id})
+    recent_sessions = await sessions_collection.find(
+        {"round": {"$gte": task.current_round_id - 5}}
+    ).to_list(length=100)
 ```
 
 ### Logger (`logging.LoggerAdapter`)
@@ -236,6 +241,7 @@ import logging
 async def exploit_with_logging(
     task: ExploitCheckerTaskMessage,
     client: AsyncClient,
+    searcher: FlagSearcher,
     logger: logging.LoggerAdapter
 ) -> Optional[str]:
     logger.info("Starting exploit attempt")
@@ -277,42 +283,44 @@ async def putflag_with_random(
     db: ChainDB,
     random: Random
 ) -> str:
-    # Generate deterministic "random" test data
-    # Same task_id always generates same values - useful for debugging
-    num_decoy_posts = random.randint(3, 10)
-    post_titles = [
-        f"Post {random.randint(1000, 9999)}"
-        for _ in range(num_decoy_posts)
-    ]
-
     # IMPORTANT: Use secrets module for actual credentials, not Random!
     username = f"user_{secrets.token_hex(8)}"
     password = secrets.token_hex(16)
 
-    # Create posts with varied but reproducible content
-    for title in post_titles:
-        await client.post("/api/posts", json={
-            "title": title,
-            "content": f"Random content {random.randint(1, 1000)}"
-        })
-
-    # Store the flag in a real post
-    await client.post("/api/posts", json={
-        "title": "My Secret",
-        "content": task.flag
+    await client.post("/auth/register", json={
+        "username": username, "password": password
     })
+    login = await client.post("/auth/login", json={
+        "username": username, "password": password
+    })
+    token = login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Generate deterministic "random" test data for fuzzing
+    # Same task_id always produces the same sequence - useful for debugging
+    num_decoy_posts = random.randint(3, 10)
+    for _ in range(num_decoy_posts):
+        await client.post("/api/posts", json={
+            "title": f"Post {random.randint(1000, 9999)}",
+            "content": f"Random content {random.randint(1, 1000)}"
+        }, headers=headers)
+
+    # Store the flag in one of this user's posts
+    await client.post("/api/posts", json={
+        "title": f"Note {random.randint(1000, 9999)}",
+        "content": task.flag
+    }, headers=headers)
 
     await db.set("username", username)
     await db.set("password", password)
-    return username
+    return username  # Players know which user to target, but not the password
 ```
 
 **Details**:
-- **CRITICAL**: Seeded with `task.task_id` for deterministic behavior
+- Seeded with `task.task_id` for deterministic behavior
 - Useful for fuzzing services with varied inputs while maintaining reproducibility
 - When a test fails, you can use the `task_id` from logs to reproduce the exact random values
-- **WARNING**: In CTF environments, predictable checker behavior can be a security risk. Attackers may predict checker actions and exploit them.
-- **IMPORTANT**: Never use `Random` for generating passwords, tokens, or other secrets. Use `secrets.token_hex()`, `secrets.token_bytes()`, or similar cryptographically secure methods instead.
+- **Security consideration**: Using `Random` for credentials means they're reproducible from task_id. In environments with predictable task IDs (like EnoEngine), attackers could predict checker credentials. In environments with random task IDs (like ecsc2025-gameserver), this is less risky. Consider your game engine and challenge design when choosing between `Random` and `secrets` for credential generation.
 
 ### TCP Socket (`AsyncSocket`)
 
@@ -320,7 +328,7 @@ async def putflag_with_random(
 
 **Usage**:
 ```python
-from enochecker3.types import AsyncSocket
+from enochecker3 import AsyncSocket
 
 @checker.putflag(0)
 async def putflag_binary_protocol(
@@ -377,7 +385,7 @@ async def exploit_with_flag_search(
         return flag  # Returns validated flag as string
 
     # Can also search in binary data
-    binary_response = await client.get("/api/export").content
+    binary_response = (await client.get("/api/export")).content
     if flag := searcher.search_flag(binary_response):
         return flag
 
@@ -425,109 +433,134 @@ async def havoc_conditional(
 
 You can register your own custom dependencies to encapsulate complex setup logic and make it reusable across checker methods.
 
-### Example: Authenticated Session
+### Example: Authenticated HTTP Client
+
+This example shows how to create a reusable authenticated client dependency and demonstrates the named dependency feature.
 
 ```python
-from dataclasses import dataclass
 import secrets
 from httpx import AsyncClient
-from enochecker3 import Enochecker, PutflagCheckerTaskMessage
+from enochecker3 import Enochecker, PutflagCheckerTaskMessage, GetflagCheckerTaskMessage, MumbleException, ChainDB
+from enochecker3.utils import assert_equals, assert_in
 
 checker = Enochecker("MyService", 8080)
 
-@dataclass
-class AuthenticatedSession:
-    """Custom dependency that provides an authenticated HTTP session."""
-    client: AsyncClient
-    username: str
-    password: str
-    session_token: str
+# Register a named dependency called "authenticated"
+# Named dependencies are resolved by matching the parameter name prefix (before underscore)
+# to the name registered with register_named_dependency
+@checker.register_named_dependency("authenticated")
+async def _get_authenticated_client(
+    db: ChainDB,
+    client: AsyncClient  # Dependencies can depend on other dependencies!
+) -> AsyncClient:
+    """
+    Retrieve credentials from ChainDB and return an authenticated HTTP client.
 
-@checker.register_dependency
-def _get_authenticated_session(
-    task: PutflagCheckerTaskMessage,  # Can depend on other dependencies!
-    client: AsyncClient
-) -> AuthenticatedSession:
-    """Create a new user and return an authenticated session."""
-    # Generate credentials
-    username = f"checker_{secrets.token_hex(8)}"
-    password = secrets.token_hex(16)
+    This dependency will be injected into parameters that:
+    - Have type annotation AsyncClient
+    - Have parameter name starting with "authenticated_" (e.g., authenticated_client)
 
-    # Register new account
-    response = client.post("/auth/register", json={
+    The regular AsyncClient dependency creates unauthenticated clients.
+    This named dependency creates authenticated clients by logging in first.
+    """
+    # Get credentials stored during putflag
+    try:
+        username = await db.get("username")
+        password = await db.get("password")
+    except KeyError:
+        raise MumbleException("Missing credentials in ChainDB")
+
+    # Login to get session token/cookie
+    login_response = await client.post("/auth/login", json={
         "username": username,
         "password": password
     })
 
-    if response.status_code != 201:
-        raise MumbleException("Failed to register user")
+    if login_response.status_code != 200:
+        raise MumbleException("Failed to login with stored credentials")
 
-    # Login to get session token
-    login_response = client.post("/auth/login", json={
-        "username": username,
-        "password": password
-    })
-
+    # Extract session token and configure client
     session_token = login_response.json()["token"]
+    client.headers["Authorization"] = f"Bearer {session_token}"
 
-    # Return authenticated session
-    return AuthenticatedSession(
-        client=client,
-        username=username,
-        password=password,
-        session_token=session_token
-    )
+    # Return the authenticated client
+    return client
 
-# Now use it in any checker method!
+# putflag creates the user and stores credentials
 @checker.putflag(0)
 async def putflag_with_auth(
     task: PutflagCheckerTaskMessage,
-    session: AuthenticatedSession,  # Automatically created and logged in!
+    client: AsyncClient,  # Regular unauthenticated client
     db: ChainDB
 ) -> str:
-    # Use the authenticated session
-    response = await session.client.post(
-        "/api/secrets",
-        json={"secret": task.flag},
-        headers={"Authorization": f"Bearer {session.session_token}"}
+    # Generate credentials
+    username = f"user_{secrets.token_hex(8)}"
+    password = secrets.token_hex(16)
+
+    # Register new account
+    response = await client.post("/auth/register", json={
+        "username": username,
+        "password": password
+    })
+    assert_equals(response.status_code, 201, "Failed to register user")
+
+    # Login and store flag in user's profile
+    login_response = await client.post("/auth/login", json={
+        "username": username,
+        "password": password
+    })
+    token = login_response.json()["token"]
+
+    await client.post(
+        "/api/profile/bio",
+        json={"bio": task.flag},
+        headers={"Authorization": f"Bearer {token}"}
     )
 
-    # Store credentials for getflag
-    await db.set("username", session.username)
-    await db.set("password", session.password)
+    # Store credentials for getflag (PRIVATE - only checker knows these)
+    await db.set("username", username)
+    await db.set("password", password)
 
-    return session.username
+    # Return PUBLIC targeting info (tells players which user to attack)
+    return username
 
+# getflag uses the authenticated client dependency
 @checker.getflag(0)
 async def getflag_with_auth(
     task: GetflagCheckerTaskMessage,
-    session: AuthenticatedSession,  # Gets a fresh authenticated session!
+    authenticated_client: AsyncClient,  # Named dependency - prefix "authenticated_" triggers our custom injector!
     db: ChainDB
 ) -> None:
-    # This session is independent from putflag's session
-    # Retrieve which user has the flag
-    flag_username = await db.get("username")
+    # The client is already authenticated with the credentials from putflag
+    # No need to login manually - the dependency handled it
 
-    # Get the secret
-    response = await session.client.get(
-        f"/api/user/{flag_username}/secrets",
-        headers={"Authorization": f"Bearer {session.session_token}"}
-    )
+    # Get username to construct the profile URL
+    username = await db.get("username")
+
+    # Fetch the user's bio (client already has auth headers set)
+    response = await authenticated_client.get(f"/api/user/{username}/bio")
 
     assert_in(task.flag, response.text)
 ```
 
-### Example: Database Connection Pool
+### Example: Database Connection with Cleanup
+
+Context manager dependencies are supported for automatic resource cleanup. Note that for context manager dependencies, the DI system matches on the return type annotation, so you must use a type alias and use the same alias in the parameter annotation.
 
 ```python
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 import asyncpg
+
+# Type alias for the managed connection. The DI system matches parameters
+# by this alias. At runtime, the parameter receives the yielded value
+# (asyncpg.Connection), not the iterator itself.
+ManagedPgConnection = AsyncIterator[asyncpg.Connection]
 
 @checker.register_dependency
 @asynccontextmanager
-async def _get_db_connection(task: PutflagCheckerTaskMessage):
-    """Provide a PostgreSQL connection (with automatic cleanup)."""
-    # Connect to the service's database
+async def _get_db_connection(task: CheckerTaskMessage) -> ManagedPgConnection:
+    """Provide a PostgreSQL connection with automatic cleanup."""
     conn = await asyncpg.connect(
         host=task.address,
         port=5432,
@@ -539,12 +572,12 @@ async def _get_db_connection(task: PutflagCheckerTaskMessage):
     try:
         yield conn  # Provide connection to checker method
     finally:
-        await conn.close()  # Automatically closed after method completes
+        await conn.close()  # Runs after method completes, even on exception
 
 @checker.exploit(0)
 async def exploit_sql_injection(
     task: ExploitCheckerTaskMessage,
-    conn: asyncpg.Connection,  # Automatically managed!
+    conn: ManagedPgConnection,  # Must use the same type alias
     searcher: FlagSearcher
 ) -> Optional[str]:
     # Connection is already open and will be automatically closed
@@ -552,57 +585,80 @@ async def exploit_sql_injection(
         "SELECT * FROM secrets WHERE public = true"
     )
 
-    all_data = "\\n".join(str(row) for row in rows)
+    all_data = "\n".join(str(row) for row in rows)
     return searcher.search_flag(all_data)
 ```
 
 ### Named Dependencies
 
-Create multiple variants of the same dependency type:
+Named dependencies let you create multiple variants of the same type. This is useful for testing different user roles or configurations.
 
 ```python
+import secrets
+from httpx import AsyncClient
+from enochecker3 import HavocCheckerTaskMessage
+from enochecker3.utils import assert_equals
+
 @checker.register_named_dependency("admin")
-def _get_admin_session(task: PutflagCheckerTaskMessage, client: AsyncClient) -> AuthenticatedSession:
-    """Create an admin user session."""
+async def _get_admin_client(task: HavocCheckerTaskMessage, client: AsyncClient) -> AsyncClient:
+    """Create an admin user and return authenticated client."""
     # Create user with admin privileges
-    response = client.post("/auth/register", json={
-        "username": "admin_" + secrets.token_hex(4),
-        "password": secrets.token_hex(16),
+    username = "admin_" + secrets.token_hex(4)
+    password = secrets.token_hex(16)
+
+    response = await client.post("/auth/register", json={
+        "username": username,
+        "password": password,
         "role": "admin"
     })
-    # ... rest of authentication logic
-    return session
+    assert_equals(response.status_code, 201, "Failed to register admin")
+
+    # Login and set auth header
+    login_response = await client.post("/auth/login", json={
+        "username": username,
+        "password": password
+    })
+    token = login_response.json()["token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    return client
 
 @checker.register_named_dependency("regular")
-def _get_regular_session(task: PutflagCheckerTaskMessage, client: AsyncClient) -> AuthenticatedSession:
-    """Create a regular user session."""
+async def _get_regular_client(task: HavocCheckerTaskMessage, client: AsyncClient) -> AsyncClient:
+    """Create a regular user and return authenticated client."""
     # Create regular user
-    response = client.post("/auth/register", json={
-        "username": "user_" + secrets.token_hex(4),
-        "password": secrets.token_hex(16),
+    username = "user_" + secrets.token_hex(4)
+    password = secrets.token_hex(16)
+
+    response = await client.post("/auth/register", json={
+        "username": username,
+        "password": password,
         "role": "user"
     })
-    # ... rest of authentication logic
-    return session
+    assert_equals(response.status_code, 201, "Failed to register user")
+
+    # Login and set auth header
+    login_response = await client.post("/auth/login", json={
+        "username": username,
+        "password": password
+    })
+    token = login_response.json()["token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    return client
 
 @checker.havoc(0)
 async def havoc_test_permissions(
     task: HavocCheckerTaskMessage,
-    admin_session: AuthenticatedSession,     # Gets admin variant
-    regular_session: AuthenticatedSession    # Gets regular variant
+    admin_client: AsyncClient,     # Gets admin variant (name prefix "admin_")
+    regular_client: AsyncClient    # Gets regular variant (name prefix "regular_")
 ) -> None:
     # Test that regular users can't access admin endpoints
-    response = await regular_session.client.get(
-        "/api/admin/users",
-        headers={"Authorization": f"Bearer {regular_session.session_token}"}
-    )
+    response = await regular_client.get("/api/admin/users")
     assert_equals(response.status_code, 403, "Regular user accessed admin endpoint!")
 
     # But admin can
-    response = await admin_session.client.get(
-        "/api/admin/users",
-        headers={"Authorization": f"Bearer {admin_session.session_token}"}
-    )
+    response = await admin_client.get("/api/admin/users")
     assert_equals(response.status_code, 200, "Admin couldn't access admin endpoint!")
 ```
 
@@ -666,6 +722,7 @@ async def putflag_with_targeting(
     password = secrets.token_hex(16)
 
     # Store PRIVATE data in ChainDB (only checker can access)
+    await db.set("username", username)
     await db.set("password", password)
 
     # Register and store flag
@@ -686,11 +743,12 @@ async def getflag_with_targeting(
     client: AsyncClient,
     db: ChainDB
 ) -> None:
-    # Retrieve targeting info from attack_info
-    username = task.attack_info  # PUBLIC info from putflag return value
-
-    # Retrieve PRIVATE data from ChainDB
-    password = await db.get("password")  # Only checker knows this
+    # Retrieve credentials from ChainDB
+    try:
+        username = await db.get("username")
+        password = await db.get("password")
+    except KeyError:
+        raise MumbleException("Missing credentials in ChainDB")
 
     # Login and retrieve flag
     await client.post("/login", json={
@@ -706,10 +764,13 @@ async def exploit_example(
     client: AsyncClient,
     searcher: FlagSearcher
 ) -> Optional[str]:
-    # Players get the target username from attack_info
+    # Exploits use attack_info (public targeting information)
+    if not task.attack_info:
+        return None  # No targeting info available
+
     username = task.attack_info  # PUBLIC: "user_abc123"
 
-    # But they DON'T know the password (stored in ChainDB)
+    # But they DON'T know the password (stored in ChainDB, checker-only)
     # They need to find an actual vulnerability to get the flag
     # Example: maybe there's an IDOR vulnerability
     response = await client.get(f"/api/user/{username}/bio")
@@ -731,6 +792,10 @@ async def exploit_example(
 - ✅ File names, document IDs, session identifiers (where to find the flag)
 - ❌ Passwords, tokens, encryption keys (should be in ChainDB)
 - ❌ Direct flag values or hints about vulnerabilities
+
+### Should getflag use attack_info?
+
+No. `getflag` should retrieve all data from ChainDB. The attack_info is public and intended for exploit methods only. See the [attack_info FAQ](#what-is-attack_info-and-how-does-it-work) above for the correct pattern.
 
 ### Why is Random seeded with task_id?
 
@@ -762,7 +827,7 @@ async def putnoise_fuzz_service(
 
 **Important notes:**
 - **Never use Random for secrets**: Use `secrets.token_hex()` or similar for passwords, tokens, session IDs, etc.
-- **Random is NOT for exploit methods**: Players don't have access to the checker's internal random state. If you need to give players targeting information (like which user to attack), return it from putflag as attack_info (see FAQ below). Exploits should be exploitable by players with only publicly available information.
+- **Random is NOT for exploit methods**: Players don't have access to the checker's internal random state. If you need to give players targeting information (like which user to attack), return it from putflag as attack_info (see FAQ below). Exploit methods should use only publicly available information.
 
 ### How do I handle HTTP errors?
 
@@ -784,10 +849,9 @@ async def putflag_example(task: PutflagCheckerTaskMessage, client: AsyncClient):
         raise OfflineException("Service unavailable")
     elif response.status_code != 200:
         raise MumbleException(f"Unexpected status: {response.status_code}")
-
-    # Option 3: Use httpx's built-in error handling
-    response.raise_for_status()  # Raises exception on 4xx/5xx
 ```
+
+**Note**: Avoid using `response.raise_for_status()`. It raises `httpx.HTTPStatusError`, which enochecker3 does not handle specifically -- it would be caught as a generic `Exception` and reported as `InternalErrorException` (a checker bug), not as `MumbleException` or `OfflineException`.
 
 ### What exceptions should I raise?
 
@@ -797,8 +861,10 @@ async def putflag_example(task: PutflagCheckerTaskMessage, client: AsyncClient):
 
 Most network exceptions are automatically converted:
 - `httpx.ConnectError`, `httpx.ConnectTimeout` → `OfflineException`
+- `httpx.RemoteProtocolError`, `httpx.DecodingError` → `OfflineException`
 - `httpx.TimeoutException`, `TimeoutError` → `MumbleException`
-- `ConnectionResetError` → `MumbleException`
+- `EOFError`, `httpx.ReadError`, `httpx.WriteError` → `MumbleException`
+- `ConnectionResetError`, `httpx.CloseError` → `MumbleException`
 - Generic `Exception` → `InternalErrorException`
 
 ### How do I test my checker locally?
@@ -814,25 +880,27 @@ Most network exceptions are automatically converted:
    curl -X POST http://localhost:8000/ -H "Content-Type: application/json" -d '{
      "method": "putflag",
      "address": "localhost",
-     "team_id": 1,
-     "team_name": "TestTeam",
-     "current_round_id": 1,
-     "related_round_id": 1,
+     "teamId": 1,
+     "teamName": "TestTeam",
+     "currentRoundId": 1,
+     "relatedRoundId": 1,
      "flag": "ENO{test_flag_12345}",
-     "variant_id": 0,
+     "variantId": 0,
      "timeout": 30000,
-     "round_length": 60000,
-     "task_chain_id": "test_chain_123",
-     "task_id": 1
+     "roundLength": 60000,
+     "taskChainId": "test_chain_123",
+     "taskId": 1
    }'
    ```
 
-3. **Use the Python API directly**:
+3. **Use the Python API directly** (requires MongoDB running):
    ```python
    import asyncio
-   from enochecker3 import PutflagCheckerTaskMessage, CheckerMethod
+   from enochecker3 import PutflagCheckerTaskMessage
+   from enochecker_core import CheckerMethod
 
    async def test():
+       await checker._init()  # Initialize MongoDB connection
        task = PutflagCheckerTaskMessage(
            task_id=1,
            method=CheckerMethod.PUTFLAG,
@@ -886,12 +954,19 @@ async def putflag_storage_variants(
     username = f"user_{secrets.token_hex(8)}"
     password = secrets.token_hex(16)
 
-    # Register user (same for all variants)
+    # Register and login (same for all variants)
     response = await client.post("/auth/register", json={
         "username": username,
         "password": password
     })
     assert_equals(response.status_code, 201)
+
+    login = await client.post("/auth/login", json={
+        "username": username,
+        "password": password
+    })
+    token = login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Store credentials for getflag (same for all variants)
     await db.set("username", username)
@@ -909,7 +984,7 @@ async def putflag_storage_variants(
         field = "description"
 
     # Store flag (same logic, different endpoint)
-    await client.post(endpoint, json={field: task.flag})
+    await client.post(endpoint, json={field: task.flag}, headers=headers)
 
     return username
 
@@ -924,18 +999,20 @@ async def getflag_storage_variants(
     password = await db.get("password")
 
     # Login (same for all variants)
-    await client.post("/auth/login", json={
+    login = await client.post("/auth/login", json={
         "username": username,
         "password": password
     })
+    token = login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Retrieve from variant-specific location
     if task.variant_id == 0:
-        response = await client.get(f"/api/user/{username}/bio")
+        response = await client.get(f"/api/user/{username}/bio", headers=headers)
     elif task.variant_id == 1:
-        response = await client.get(f"/api/user/{username}/status")
+        response = await client.get(f"/api/user/{username}/status", headers=headers)
     else:  # variant_id == 2
-        response = await client.get(f"/api/user/{username}/description")
+        response = await client.get(f"/api/user/{username}/description", headers=headers)
 
     assert_in(task.flag, response.text)
 ```
@@ -1004,18 +1081,18 @@ async def putflag_database_storage(
 2. **Check for missing return type annotations**:
    ```python
    @checker.register_dependency
-   def broken_dependency(task):  # ERROR: missing return type!
+   def broken_dependency(task: CheckerTaskMessage):  # ERROR: missing return type!
        return SomeObject()
 
    @checker.register_dependency
-   def fixed_dependency(task) -> SomeObject:  # OK!
+   def fixed_dependency(task: CheckerTaskMessage) -> SomeObject:  # OK!
        return SomeObject()
    ```
 
 3. **Verify type annotations match exactly**:
    ```python
    @checker.register_dependency
-   def get_session(task) -> AuthSession:  # Returns AuthSession
+   def get_session(task: CheckerTaskMessage) -> AuthSession:  # Returns AuthSession
        return AuthSession()
 
    @checker.putflag(0)
@@ -1121,13 +1198,11 @@ class Session:
     role: str
 
 @checker.register_named_dependency("admin")
-def _get_admin_session(task, client: AsyncClient) -> Session:
-    # Create admin user and return session
+def _get_admin_session(task: CheckerTaskMessage, client: AsyncClient) -> Session:
     return Session(client=client, role="admin")
 
 @checker.register_named_dependency("user")
-def _get_user_session(task, client: AsyncClient) -> Session:
-    # Create regular user and return session
+def _get_user_session(task: CheckerTaskMessage, client: AsyncClient) -> Session:
     return Session(client=client, role="user")
 
 @checker.havoc(0)
@@ -1147,4 +1222,3 @@ async def havoc_test_permissions(
 - Parameter names don't affect this (except for named dependency resolution)
 - Named dependencies (prefix before `_`) allow using different injector functions
 - Useful for concurrent operations or testing different user roles/permissions
-```
