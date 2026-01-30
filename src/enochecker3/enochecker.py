@@ -461,7 +461,8 @@ class Enochecker:
         self, task: PutflagCheckerTaskMessage
     ) -> CheckerResultMessage:
         attack_info: Optional[str | bytes] = await self._call_method(task)
-        assert isinstance(attack_info, str)
+        if isinstance(attack_info, bytes):
+            attack_info = attack_info.decode()
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
