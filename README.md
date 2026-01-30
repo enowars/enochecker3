@@ -79,7 +79,7 @@ Enochecker3 uses dependency injection to provide common resources to your checke
 
 ### HTTP Client (`httpx.AsyncClient`)
 
-**When to use**: Making HTTP requests to the service being checked
+Make HTTP requests to the service being checked. Pre-configured with `base_url=http://{task.address}:{service_port}` and SSL verification disabled (suitable for CTF environments).
 
 **Usage**:
 ```python
@@ -100,13 +100,11 @@ async def putflag_web(task: PutflagCheckerTaskMessage, client: AsyncClient) -> s
     return doc_id  # Returned as attack_info (public, available to all players)
 ```
 
-**Details**:
-- Automatically configured with the service's base URL
-- SSL verification disabled (suitable for CTF environments)
-
 ### ChainDB (`ChainDB`)
 
-**When to use**: Storing **private** data between putflag and corresponding getflag rounds (data only the checker can access)
+Store private data between putflag and getflag (not accessible to players). Automatically scoped to `task_chain_id` to link related rounds. Data persists across rounds in MongoDB. Throws `KeyError` if key doesn't exist. Use `await db.set(key, value)` and `await db.get(key)`.
+
+**Contrast with attack_info**: ChainDB stores secrets (private), while putflag's return value becomes attack_info (public).
 
 **Usage**:
 ```python
@@ -160,17 +158,9 @@ async def getflag_with_retrieval(
     assert_in(task.flag, response.text)
 ```
 
-**Details**:
-- **Private storage**: Data in ChainDB is only accessible to the checker, never to players
-- Automatically scoped to the task_chain_id (links putflag and getflag)
-- Throws `KeyError` if key doesn't exist
-- Persists across rounds in MongoDB
-- Use `await db.set(key, value)` and `await db.get(key)`
-- **Contrast with attack_info**: The return value from putflag becomes public attack_info, while ChainDB stores secrets
-
 ### MongoDB Collection (`AsyncCollection`)
 
-**When to use**: Advanced MongoDB operations, team-specific data storage (should be rarely needed, check if ChainDB is sufficient for your use case)
+Complex queries beyond key-value storage (rarely needed—try ChainDB first). Automatically scoped to `team_{task.team_id}`. Full MongoDB async API available.
 
 **Usage**:
 ```python
@@ -199,14 +189,9 @@ async def putnoise_with_mongo(
     }).to_list(length=100)
 ```
 
-**Details**:
-- Automatically scoped to the current team (`team_{task.team_id}`)
-- Full MongoDB async API available
-- Use for complex queries beyond simple key-value storage
-
 ### MongoDB Database (`AsyncDatabase`)
 
-**When to use**: Accessing multiple collections or database-wide operations (should be rarely needed, check if ChainDB or AsyncCollection is sufficient for your use case)
+Multiple collections or database-wide operations (rarely needed—try ChainDB or AsyncCollection first).
 
 **Usage**:
 ```python
@@ -231,7 +216,7 @@ async def havoc_with_database(
 
 ### Logger (`logging.LoggerAdapter`)
 
-**When to use**: Logging with automatic task context
+Logging with automatic task context. Includes `service_name`, `checker_name`, and task details in all log messages. Outputs ELK-compatible JSON by default. Use `LOG_FORMAT=DEBUG` environment variable for human-readable logs.
 
 **Usage**:
 ```python
@@ -260,16 +245,14 @@ async def exploit_with_logging(
         raise
 ```
 
-**Details**:
-- Automatically includes service_name, checker_name, and task details in logs
-- Outputs in ELK-compatible JSON format
-- Use `LOG_FORMAT=DEBUG` environment variable for human-readable logs
-
 ### Random Number Generator (`random.Random`)
 
-**When to use**: Generating reproducible random data for long-term testing and fuzzing
+Reproducible random data for testing and fuzzing. Seeded with `task_id` for deterministic behavior—when a test fails, use the `task_id` from logs to replay the exact random values.
 
-**Primary use case**: When you need to test your service with varied, "random" inputs over many rounds, but want to be able to reproduce specific test cases when issues are found. By using the seeded Random, you can look at the `task_id` in checker logs and replay the exact same random data that caused a problem.
+**Use for**: Varied test data, decoy content, fuzzing patterns
+**Never use for**: Passwords, tokens, or credentials (use `secrets` module instead)
+
+**Security consideration**: In environments with predictable task IDs (like EnoEngine), using `Random` for credentials means attackers could predict them. In environments with random task IDs (like ecsc2025-gameserver), this is less risky. Consider your game engine when choosing between `Random` and `secrets`.
 
 **Usage**:
 ```python
@@ -316,15 +299,9 @@ async def putflag_with_random(
     return username  # Players know which user to target, but not the password
 ```
 
-**Details**:
-- Seeded with `task.task_id` for deterministic behavior
-- Useful for fuzzing services with varied inputs while maintaining reproducibility
-- When a test fails, you can use the `task_id` from logs to reproduce the exact random values
-- **Security consideration**: Using `Random` for credentials means they're reproducible from task_id. In environments with predictable task IDs (like EnoEngine), attackers could predict checker credentials. In environments with random task IDs (like ecsc2025-gameserver), this is less risky. Consider your game engine and challenge design when choosing between `Random` and `secrets` for credential generation.
-
 ### TCP Socket (`AsyncSocket`)
 
-**When to use**: Binary protocols, custom network protocols, raw TCP
+Binary protocols, custom network protocols, raw TCP. Returns `(StreamReader, StreamWriter)` tuple. Automatically connects to `task.address:service_port`. Connection closes automatically after method completes. Raises `OfflineException` if connection fails.
 
 **Usage**:
 ```python
@@ -357,15 +334,9 @@ async def putflag_binary_protocol(
     return storage_id
 ```
 
-**Details**:
-- Returns `(StreamReader, StreamWriter)` tuple
-- Automatically connects to `task.address:service_port`
-- Connection automatically closed after method completes
-- Raises `OfflineException` if connection fails
-
 ### Flag Searcher (`FlagSearcher`)
 
-**When to use**: Exploit methods to find and validate flags
+Find and validate flags in exploit methods. Only available in exploit methods. Automatically configured with `flag_regex` and `flag_hash` from task. Validates flag hash if provided. Accepts both `str` and `bytes` input. Returns `bytes` if flag found, `None` otherwise.
 
 **Usage**:
 ```python
@@ -393,16 +364,9 @@ async def exploit_with_flag_search(
     return None
 ```
 
-**Details**:
-- Only available in exploit methods
-- Automatically configured with `flag_regex` and `flag_hash` from task
-- Validates flag hash if provided
-- Accepts both `str` and `bytes` input
-- Returns `bytes` if flag found, `None` otherwise
-
 ### Dependency Injector (`DependencyInjector`)
 
-**When to use**: Conditional or dynamic dependency resolution
+Dynamic dependency resolution at runtime. Use when dependencies are conditional or not always needed. Must be used as async context manager if managing resources.
 
 **Usage**:
 ```python
@@ -424,18 +388,66 @@ async def havoc_conditional(
     await client.get("/health")
 ```
 
-**Details**:
-- Allows dynamic dependency resolution at runtime
-- Use when dependencies are conditional or not always needed
-- Must be used as async context manager if managing resources
-
 ## Adding Custom Dependencies
 
 You can register your own custom dependencies to encapsulate complex setup logic and make it reusable across checker methods.
 
-### Example: Authenticated HTTP Client
+### Key Points for Custom Dependencies
 
-This example shows how to create a reusable authenticated client dependency and demonstrates the named dependency feature.
+1. **Type annotations are required**: The return type is used to match parameters
+2. **Dependencies can depend on dependencies**: They're recursively injected
+3. **Context managers are supported**: Use `@asynccontextmanager` for automatic cleanup
+4. **Circular dependencies are detected**: Will raise `CircularDependencyException`
+5. **Each parameter gets a fresh instance**: Even if multiple parameters have the same type, each gets its own instance (see FAQ below)
+
+### Example: Database Connection with Cleanup
+
+Context manager dependencies are supported for automatic resource cleanup. Note that for context manager dependencies, the DI system matches on the return type annotation, so you must use a type alias and use the same alias in the parameter annotation.
+
+```python
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+import asyncpg
+
+# Type alias for the managed connection. The DI system matches parameters
+# by this alias. At runtime, the parameter receives the yielded value
+# (asyncpg.Connection), not the iterator itself.
+ManagedPgConnection = AsyncIterator[asyncpg.Connection]
+
+@checker.register_dependency
+@asynccontextmanager
+async def _get_db_connection(task: CheckerTaskMessage) -> ManagedPgConnection:
+    """PostgreSQL connection with automatic cleanup."""
+    conn = await asyncpg.connect(
+        host=task.address,
+        port=5432,
+        user="checker",
+        password="checker_pass",
+        database="ctf_service"
+    )
+
+    try:
+        yield conn
+    finally:
+        await conn.close()
+
+@checker.exploit(0)
+async def exploit_sql_injection(
+    task: ExploitCheckerTaskMessage,
+    conn: ManagedPgConnection,  # Must use the same type alias
+    searcher: FlagSearcher
+) -> Optional[str]:
+    rows = await conn.fetch(
+        "SELECT * FROM secrets WHERE public = true"
+    )
+
+    all_data = "\n".join(str(row) for row in rows)
+    return searcher.search_flag(all_data)
+```
+
+### Example: Authenticated HTTP Client (Named Dependency)
+
+Named dependencies let you create multiple variants of the same type. This example demonstrates using named dependencies to create an authenticated client.
 
 ```python
 import secrets
@@ -459,9 +471,6 @@ async def _get_authenticated_client(
     This dependency will be injected into parameters that:
     - Have type annotation AsyncClient
     - Have parameter name starting with "authenticated_" (e.g., authenticated_client)
-
-    The regular AsyncClient dependency creates unauthenticated clients.
-    This named dependency creates authenticated clients by logging in first.
     """
     # Get credentials stored during putflag
     try:
@@ -528,162 +537,28 @@ async def putflag_with_auth(
 @checker.getflag(0)
 async def getflag_with_auth(
     task: GetflagCheckerTaskMessage,
-    authenticated_client: AsyncClient,  # Named dependency - prefix "authenticated_" triggers our custom injector!
+    authenticated_client: AsyncClient,  # Named dependency resolved by "authenticated_" prefix
     db: ChainDB
 ) -> None:
-    # The client is already authenticated with the credentials from putflag
-    # No need to login manually - the dependency handled it
-
-    # Get username to construct the profile URL
+    # Client is already authenticated via the named dependency
     username = await db.get("username")
-
-    # Fetch the user's bio (client already has auth headers set)
     response = await authenticated_client.get(f"/api/user/{username}/bio")
-
     assert_in(task.flag, response.text)
 ```
-
-### Example: Database Connection with Cleanup
-
-Context manager dependencies are supported for automatic resource cleanup. Note that for context manager dependencies, the DI system matches on the return type annotation, so you must use a type alias and use the same alias in the parameter annotation.
-
-```python
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
-import asyncpg
-
-# Type alias for the managed connection. The DI system matches parameters
-# by this alias. At runtime, the parameter receives the yielded value
-# (asyncpg.Connection), not the iterator itself.
-ManagedPgConnection = AsyncIterator[asyncpg.Connection]
-
-@checker.register_dependency
-@asynccontextmanager
-async def _get_db_connection(task: CheckerTaskMessage) -> ManagedPgConnection:
-    """Provide a PostgreSQL connection with automatic cleanup."""
-    conn = await asyncpg.connect(
-        host=task.address,
-        port=5432,
-        user="checker",
-        password="checker_pass",
-        database="ctf_service"
-    )
-
-    try:
-        yield conn  # Provide connection to checker method
-    finally:
-        await conn.close()  # Runs after method completes, even on exception
-
-@checker.exploit(0)
-async def exploit_sql_injection(
-    task: ExploitCheckerTaskMessage,
-    conn: ManagedPgConnection,  # Must use the same type alias
-    searcher: FlagSearcher
-) -> Optional[str]:
-    # Connection is already open and will be automatically closed
-    rows = await conn.fetch(
-        "SELECT * FROM secrets WHERE public = true"
-    )
-
-    all_data = "\n".join(str(row) for row in rows)
-    return searcher.search_flag(all_data)
-```
-
-### Named Dependencies
-
-Named dependencies let you create multiple variants of the same type. This is useful for testing different user roles or configurations.
-
-```python
-import secrets
-from httpx import AsyncClient
-from enochecker3 import HavocCheckerTaskMessage
-from enochecker3.utils import assert_equals
-
-@checker.register_named_dependency("admin")
-async def _get_admin_client(task: HavocCheckerTaskMessage, client: AsyncClient) -> AsyncClient:
-    """Create an admin user and return authenticated client."""
-    # Create user with admin privileges
-    username = "admin_" + secrets.token_hex(4)
-    password = secrets.token_hex(16)
-
-    response = await client.post("/auth/register", json={
-        "username": username,
-        "password": password,
-        "role": "admin"
-    })
-    assert_equals(response.status_code, 201, "Failed to register admin")
-
-    # Login and set auth header
-    login_response = await client.post("/auth/login", json={
-        "username": username,
-        "password": password
-    })
-    token = login_response.json()["token"]
-    client.headers["Authorization"] = f"Bearer {token}"
-
-    return client
-
-@checker.register_named_dependency("regular")
-async def _get_regular_client(task: HavocCheckerTaskMessage, client: AsyncClient) -> AsyncClient:
-    """Create a regular user and return authenticated client."""
-    # Create regular user
-    username = "user_" + secrets.token_hex(4)
-    password = secrets.token_hex(16)
-
-    response = await client.post("/auth/register", json={
-        "username": username,
-        "password": password,
-        "role": "user"
-    })
-    assert_equals(response.status_code, 201, "Failed to register user")
-
-    # Login and set auth header
-    login_response = await client.post("/auth/login", json={
-        "username": username,
-        "password": password
-    })
-    token = login_response.json()["token"]
-    client.headers["Authorization"] = f"Bearer {token}"
-
-    return client
-
-@checker.havoc(0)
-async def havoc_test_permissions(
-    task: HavocCheckerTaskMessage,
-    admin_client: AsyncClient,     # Gets admin variant (name prefix "admin_")
-    regular_client: AsyncClient    # Gets regular variant (name prefix "regular_")
-) -> None:
-    # Test that regular users can't access admin endpoints
-    response = await regular_client.get("/api/admin/users")
-    assert_equals(response.status_code, 403, "Regular user accessed admin endpoint!")
-
-    # But admin can
-    response = await admin_client.get("/api/admin/users")
-    assert_equals(response.status_code, 200, "Admin couldn't access admin endpoint!")
-```
-
-### Key Points for Custom Dependencies
-
-1. **Type annotations are required**: The return type is used to match parameters
-2. **Dependencies can depend on dependencies**: They're recursively injected
-3. **Context managers are supported**: Use `@asynccontextmanager` for automatic cleanup
-4. **Circular dependencies are detected**: Will raise `CircularDependencyException`
-5. **Each parameter gets a fresh instance**: Even if multiple parameters have the same type, each gets its own instance (see FAQ below)
 
 ## Good to Know / FAQ
 
 ### How does dependency injection work?
 
-When you declare a parameter with a type annotation, enochecker3:
-1. Checks if the type is a task message type → injects the task directly
-2. Looks up a registered dependency provider for that type
-3. Recursively injects dependencies that the provider needs
-4. Calls the provider to create the dependency instance
-5. If it's a context manager, enters it and manages cleanup
+Enochecker3 matches parameter types to dependency providers:
+1. Task message types inject the task directly
+2. Other types look up registered dependency providers
+3. Provider dependencies are resolved recursively
+4. Context managers are entered automatically and cleaned up after method execution
 
 ### How do I share data between putflag and getflag?
 
-Use ChainDB for **private** data (only accessible to the checker):
+Use ChainDB (private data, automatically scoped to task_chain_id):
 ```python
 @checker.putflag(0)
 async def putflag_example(task: PutflagCheckerTaskMessage, db: ChainDB) -> str:
@@ -694,22 +569,14 @@ async def putflag_example(task: PutflagCheckerTaskMessage, db: ChainDB) -> str:
 
 @checker.getflag(0)
 async def getflag_example(task: GetflagCheckerTaskMessage, db: ChainDB) -> None:
-    username = await db.get("username")  # Same task_chain_id
+    username = await db.get("username")
     password = await db.get("password")
-    # ... use credentials
 ```
 
 ### What is attack_info and how does it work?
 
-**Attack_info** is **public targeting information** provided to players for their exploits. It helps players know *where* to attack without having to enumerate all possible targets, but they still need to figure out *how* to exploit the service.
+**Attack_info** is public targeting information (e.g., username, document ID, filename). It helps players know *where* to attack without having to enumerate all possible targets, but they still need to figure out *how* to exploit the service. When putflag returns a string, the game engine makes it available to all players as `task.attack_info`.
 
-**How it works:**
-1. Your `putflag` method returns a string
-2. This string becomes the `attack_info` field in the task
-3. The game engine makes this information **publicly available** to all players
-4. Players can use this to target their exploits efficiently
-
-**Example - User targeting:**
 ```python
 @checker.putflag(0)
 async def putflag_with_targeting(
@@ -717,25 +584,20 @@ async def putflag_with_targeting(
     client: AsyncClient,
     db: ChainDB
 ) -> str:
-    # Create account with secure random credentials
     username = f"user_{secrets.token_hex(8)}"
     password = secrets.token_hex(16)
 
-    # Store PRIVATE data in ChainDB (only checker can access)
+    # Store PRIVATE data in ChainDB
     await db.set("username", username)
     await db.set("password", password)
 
-    # Register and store flag
     response = await client.post("/register", json={
         "username": username,
         "password": password,
         "bio": task.flag
     })
 
-    # Return PUBLIC targeting info
-    # This tells players "the flag is in this user's bio"
-    # but they still need to exploit the service to get it
-    return username  # This becomes attack_info
+    return username  # PUBLIC attack_info - players know which user, not password
 
 @checker.getflag(0)
 async def getflag_with_targeting(
@@ -743,14 +605,12 @@ async def getflag_with_targeting(
     client: AsyncClient,
     db: ChainDB
 ) -> None:
-    # Retrieve credentials from ChainDB
     try:
         username = await db.get("username")
         password = await db.get("password")
     except KeyError:
         raise MumbleException("Missing credentials in ChainDB")
 
-    # Login and retrieve flag
     await client.post("/login", json={
         "username": username,
         "password": password
@@ -764,34 +624,19 @@ async def exploit_example(
     client: AsyncClient,
     searcher: FlagSearcher
 ) -> Optional[str]:
-    # Exploits use attack_info (public targeting information)
     if not task.attack_info:
-        return None  # No targeting info available
+        return None
 
-    username = task.attack_info  # PUBLIC: "user_abc123"
+    username = task.attack_info  # PUBLIC - know which user, not password
 
-    # But they DON'T know the password (stored in ChainDB, checker-only)
-    # They need to find an actual vulnerability to get the flag
-    # Example: maybe there's an IDOR vulnerability
+    # Must exploit vulnerability (e.g., IDOR or SQLi) to get flag
     response = await client.get(f"/api/user/{username}/bio")
-
-    # Or maybe there's an SQL injection
-    # response = await client.get(f"/search?q={username}' OR '1'='1")
-
     return searcher.search_flag(response.text)
 ```
 
-**Key principles:**
-- **attack_info = targeting information**: Prevents resource-intensive enumeration (e.g., trying 10,000 usernames)
-- **Not a free pass**: Players still need to find and exploit actual vulnerabilities
-- **PUBLIC information**: All teams can see attack_info for all other teams' flags
-- **Think of it as "where to look"**, not "how to get it"
+**Include:** User IDs, usernames, post IDs, file names, document IDs, session identifiers
 
-**What to include in attack_info:**
-- ✅ User IDs, usernames, post IDs (targeting info)
-- ✅ File names, document IDs, session identifiers (where to find the flag)
-- ❌ Passwords, tokens, encryption keys (should be in ChainDB)
-- ❌ Direct flag values or hints about vulnerabilities
+**Exclude:** Passwords, tokens, encryption keys (use ChainDB), direct flag values, vulnerability hints
 
 ### Should getflag use attack_info?
 
@@ -799,127 +644,86 @@ No. `getflag` should retrieve all data from ChainDB. The attack_info is public a
 
 ### Why is Random seeded with task_id?
 
-The purpose is **reproducibility for debugging and long-term testing**. When you're fuzzing or testing a service over thousands of rounds with varied inputs, being able to reproduce a specific failure is crucial.
+For reproducible debugging. When a checker fails with task_id=12345, re-run with the same task_id to replay the exact random sequence.
 
-**How it helps debugging:**
-1. Your checker runs with random test data and fails on task_id=12345
-2. You look at the logs and see task_id=12345
-3. You can re-run or debug with the same task_id and get the exact same "random" data
-4. This makes it easy to reproduce and fix intermittent issues
-
-**Example - Reproducible test data:**
 ```python
 @checker.putnoise(0)
-async def putnoise_fuzz_service(
-    task: PutnoiseCheckerTaskMessage,
-    client: AsyncClient,
-    random: Random
-) -> None:
-    # Generate varied test data that's reproducible for debugging
+async def putnoise_fuzz(task: PutnoiseCheckerTaskMessage, client: AsyncClient, random: Random) -> None:
     num_requests = random.randint(5, 20)
     for i in range(num_requests):
-        # Each task_id creates different but reproducible request patterns
         endpoint = random.choice(["/api/users", "/api/posts", "/api/comments"])
         await client.get(endpoint)
-
-    # If this fails, task_id in logs lets you replay the exact sequence
 ```
 
-**Important notes:**
-- **Never use Random for secrets**: Use `secrets.token_hex()` or similar for passwords, tokens, session IDs, etc.
-- **Random is NOT for exploit methods**: Players don't have access to the checker's internal random state. If you need to give players targeting information (like which user to attack), return it from putflag as attack_info (see FAQ below). Exploit methods should use only publicly available information.
+**Security consideration:** In environments with predictable task IDs (like EnoEngine), using Random for credentials means attackers could predict them. In environments with random task IDs (like ecsc2025-gameserver), this is less risky. Consider your game engine when choosing between Random and `secrets`.
 
 ### How do I handle HTTP errors?
 
-Use the assertion helpers or raise exceptions directly:
+Use assertion helpers or raise exceptions directly:
 
 ```python
-from enochecker3.utils import assert_equals, assert_in
+from enochecker3.utils import assert_equals
 from enochecker3 import MumbleException, OfflineException
 
 @checker.putflag(0)
 async def putflag_example(task: PutflagCheckerTaskMessage, client: AsyncClient):
     response = await client.post("/api/store", json={"data": task.flag})
+    assert_equals(response.status_code, 200, "Failed to store data")  # Raises MumbleException
 
-    # Option 1: Use assertion helpers (raises MumbleException on failure)
-    assert_equals(response.status_code, 200, "Failed to store data")
-
-    # Option 2: Raise exceptions directly
+    # Or raise directly:
     if response.status_code == 503:
         raise OfflineException("Service unavailable")
-    elif response.status_code != 200:
-        raise MumbleException(f"Unexpected status: {response.status_code}")
 ```
 
-**Note**: Avoid using `response.raise_for_status()`. It raises `httpx.HTTPStatusError`, which enochecker3 does not handle specifically -- it would be caught as a generic `Exception` and reported as `InternalErrorException` (a checker bug), not as `MumbleException` or `OfflineException`.
+Avoid `response.raise_for_status()` - it raises `httpx.HTTPStatusError`, which becomes `InternalErrorException` (checker bug) instead of `MumbleException`.
 
 ### What exceptions should I raise?
 
-- **MumbleException**: Service is online but behaving incorrectly (wrong data, protocol violation, flag not found)
-- **OfflineException**: Service is not reachable or completely broken (connection refused, timeouts, 503 errors)
-- **InternalErrorException**: Checker bug (wrong logic, programming error)
+- **MumbleException**: Service online but broken (wrong data, protocol violation, flag not found)
+- **OfflineException**: Service unreachable (connection refused, timeouts, 503 errors)
+- **InternalErrorException**: Checker bug (programming error)
 
-Most network exceptions are automatically converted:
-- `httpx.ConnectError`, `httpx.ConnectTimeout` → `OfflineException`
-- `httpx.RemoteProtocolError`, `httpx.DecodingError` → `OfflineException`
-- `httpx.TimeoutException`, `TimeoutError` → `MumbleException`
-- `EOFError`, `httpx.ReadError`, `httpx.WriteError` → `MumbleException`
-- `ConnectionResetError`, `httpx.CloseError` → `MumbleException`
+Network exceptions are automatically converted:
+- `ConnectError`, `ConnectTimeout`, `RemoteProtocolError`, `DecodingError` → `OfflineException`
+- `TimeoutException`, `TimeoutError`, `EOFError`, `ReadError`, `WriteError`, `ConnectionResetError`, `CloseError` → `MumbleException`
 - Generic `Exception` → `InternalErrorException`
 
 ### How do I test my checker locally?
 
-1. **Interactive testing via Swagger UI**:
-   ```bash
-   uvicorn example:checker.app --reload
-   # Browse to http://localhost:8000/docs
-   ```
+**Swagger UI** (interactive):
+```bash
+uvicorn example:checker.app --reload
+# Browse to http://localhost:8000/docs
+```
 
-2. **Send requests with curl**:
-   ```bash
-   curl -X POST http://localhost:8000/ -H "Content-Type: application/json" -d '{
-     "method": "putflag",
-     "address": "localhost",
-     "teamId": 1,
-     "teamName": "TestTeam",
-     "currentRoundId": 1,
-     "relatedRoundId": 1,
-     "flag": "ENO{test_flag_12345}",
-     "variantId": 0,
-     "timeout": 30000,
-     "roundLength": 60000,
-     "taskChainId": "test_chain_123",
-     "taskId": 1
-   }'
-   ```
+**curl** (command line):
+```bash
+curl -X POST http://localhost:8000/ -H "Content-Type: application/json" -d '{
+  "method": "putflag", "address": "localhost", "teamId": 1, "teamName": "Test",
+  "currentRoundId": 1, "relatedRoundId": 1, "flag": "ENO{test}", "variantId": 0,
+  "timeout": 30000, "roundLength": 60000, "taskChainId": "test", "taskId": 1
+}'
+```
 
-3. **Use the Python API directly** (requires MongoDB running):
-   ```python
-   import asyncio
-   from enochecker3 import PutflagCheckerTaskMessage
-   from enochecker_core import CheckerMethod
+**Python API** (requires MongoDB):
+```python
+import asyncio
+from enochecker3 import PutflagCheckerTaskMessage
+from enochecker_core import CheckerMethod
 
-   async def test():
-       await checker._init()  # Initialize MongoDB connection
-       task = PutflagCheckerTaskMessage(
-           task_id=1,
-           method=CheckerMethod.PUTFLAG,
-           address="localhost",
-           team_id=1,
-           team_name="Test",
-           current_round_id=1,
-           related_round_id=1,
-           flag="ENO{test}",
-           variant_id=0,
-           timeout=30000,
-           round_length=60000,
-           task_chain_id="test"
-       )
-       result = await checker._call_putflag(task)
-       print(result)
+async def test():
+    await checker._init()
+    task = PutflagCheckerTaskMessage(
+        task_id=1, method=CheckerMethod.PUTFLAG, address="localhost",
+        team_id=1, team_name="Test", current_round_id=1, related_round_id=1,
+        flag="ENO{test}", variant_id=0, timeout=30000,
+        round_length=60000, task_chain_id="test"
+    )
+    result = await checker._call_putflag(task)
+    print(result)
 
-   asyncio.run(test())
-   ```
+asyncio.run(test())
+```
 
 ### Do I need MongoDB running?
 
@@ -928,7 +732,7 @@ Yes, ChainDB requires MongoDB. Start it with Docker:
 docker run -d -p 27017:27017 mongo:latest
 ```
 
-Or configure connection with environment variables:
+Or configure connection to an existing MongoDB with environment variables:
 ```bash
 export MONGO_HOST=mongodb.example.com
 export MONGO_PORT=27017
@@ -938,181 +742,79 @@ export MONGO_PASSWORD=secret
 
 ### Can I use multiple variant ids in a single function?
 
-Yes! Variants let you have multiple strategies for the same checker method.
-
-**When to use shared function with multiple variants:**
-Use this approach when variants share most of their code and only differ in small details:
+Yes. Use shared functions when variants differ only in small details:
 
 ```python
-@checker.putflag(0, 1, 2)  # Register three variants at once
-async def putflag_storage_variants(
-    task: PutflagCheckerTaskMessage,
-    client: AsyncClient,
-    db: ChainDB
-) -> str:
-    # Shared setup code
+@checker.putflag(0, 1, 2)
+async def putflag_variants(task: PutflagCheckerTaskMessage, client: AsyncClient, db: ChainDB) -> str:
     username = f"user_{secrets.token_hex(8)}"
     password = secrets.token_hex(16)
 
-    # Register and login (same for all variants)
-    response = await client.post("/auth/register", json={
-        "username": username,
-        "password": password
-    })
-    assert_equals(response.status_code, 201)
-
-    login = await client.post("/auth/login", json={
-        "username": username,
-        "password": password
-    })
+    await client.post("/auth/register", json={"username": username, "password": password})
+    login = await client.post("/auth/login", json={"username": username, "password": password})
     token = login.json()["token"]
-    headers = {"Authorization": f"Bearer {token}"}
 
-    # Store credentials for getflag (same for all variants)
     await db.set("username", username)
     await db.set("password", password)
 
-    # Only the storage location differs based on variant
-    if task.variant_id == 0:
-        endpoint = "/api/profile/bio"
-        field = "bio"
-    elif task.variant_id == 1:
-        endpoint = "/api/profile/status"
-        field = "status"
-    else:  # variant_id == 2
-        endpoint = "/api/profile/description"
-        field = "description"
-
-    # Store flag (same logic, different endpoint)
-    await client.post(endpoint, json={field: task.flag}, headers=headers)
-
+    # Variants differ only in endpoint
+    endpoints = {0: "/api/profile/bio", 1: "/api/profile/status", 2: "/api/profile/description"}
+    await client.post(endpoints[task.variant_id], json={"data": task.flag}, headers={"Authorization": f"Bearer {token}"})
     return username
-
-@checker.getflag(0, 1, 2)
-async def getflag_storage_variants(
-    task: GetflagCheckerTaskMessage,
-    client: AsyncClient,
-    db: ChainDB
-) -> None:
-    # Retrieve credentials (same for all variants)
-    username = await db.get("username")
-    password = await db.get("password")
-
-    # Login (same for all variants)
-    login = await client.post("/auth/login", json={
-        "username": username,
-        "password": password
-    })
-    token = login.json()["token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    # Retrieve from variant-specific location
-    if task.variant_id == 0:
-        response = await client.get(f"/api/user/{username}/bio", headers=headers)
-    elif task.variant_id == 1:
-        response = await client.get(f"/api/user/{username}/status", headers=headers)
-    else:  # variant_id == 2
-        response = await client.get(f"/api/user/{username}/description", headers=headers)
-
-    assert_in(task.flag, response.text)
 ```
 
-**When to use separate functions per variant:**
-When variants have completely different logic with little code reuse, **prefer registering them separately** for better readability:
+Use separate functions when logic differs significantly:
 
 ```python
-# Preferred approach when logic differs significantly
 @checker.putflag(0)
-async def putflag_api_storage(
-    task: PutflagCheckerTaskMessage,
-    client: AsyncClient,
-    db: ChainDB
-) -> str:
-    """Store flag in the API."""
+async def putflag_api(task: PutflagCheckerTaskMessage, client: AsyncClient, db: ChainDB) -> str:
     note_id = secrets.token_hex(16)
-    await client.post("/api/notes", json={
-        "id": note_id,
-        "content": task.flag
-    })
+    await client.post("/api/notes", json={"id": note_id, "content": task.flag})
     await db.set("note_id", note_id)
     return note_id
 
 @checker.putflag(1)
-async def putflag_file_storage(
-    task: PutflagCheckerTaskMessage,
-    client: AsyncClient,
-    db: ChainDB
-) -> str:
-    """Store flag in uploaded file."""
+async def putflag_file(task: PutflagCheckerTaskMessage, client: AsyncClient, db: ChainDB) -> str:
     filename = f"secret_{secrets.token_hex(8)}.txt"
-    await client.post("/api/upload", files={
-        "file": (filename, task.flag.encode())
-    })
+    await client.post("/api/upload", files={"file": (filename, task.flag.encode())})
     await db.set("filename", filename)
     return filename
-
-@checker.putflag(2)
-async def putflag_database_storage(
-    task: PutflagCheckerTaskMessage,
-    client: AsyncClient,
-    db: ChainDB
-) -> str:
-    """Store flag directly in database table."""
-    record_id = secrets.token_hex(16)
-    await client.post("/api/db/secrets", json={
-        "id": record_id,
-        "secret": task.flag,
-        "public": False
-    })
-    await db.set("record_id", record_id)
-    return record_id
 ```
-
-**Best practice**: Unless you have significant code reuse, separate functions are clearer and easier to maintain.
 
 ### How do I debug dependency injection issues?
 
-1. **Enable debug logging**:
-   ```bash
-   export LOG_FORMAT=DEBUG
-   uvicorn example:checker.app
-   ```
+Enable debug logging:
+```bash
+export LOG_FORMAT=DEBUG
+uvicorn example:checker.app
+```
 
-2. **Check for missing return type annotations**:
-   ```python
-   @checker.register_dependency
-   def broken_dependency(task: CheckerTaskMessage):  # ERROR: missing return type!
-       return SomeObject()
+Check for missing return type annotations:
+```python
+@checker.register_dependency
+def broken_dependency(task: CheckerTaskMessage):  # ERROR: missing return type
+    return SomeObject()
 
-   @checker.register_dependency
-   def fixed_dependency(task: CheckerTaskMessage) -> SomeObject:  # OK!
-       return SomeObject()
-   ```
+@checker.register_dependency
+def fixed_dependency(task: CheckerTaskMessage) -> SomeObject:  # OK
+    return SomeObject()
+```
 
-3. **Verify type annotations match exactly**:
-   ```python
-   @checker.register_dependency
-   def get_session(task: CheckerTaskMessage) -> AuthSession:  # Returns AuthSession
-       return AuthSession()
-
-   @checker.putflag(0)
-   async def putflag(task, session: AuthSession):  # Must match exactly!
-       ...
-   ```
+Verify type annotations match exactly between dependency and parameter.
 
 ### Can dependencies be async?
 
-Yes! Both sync and async dependency providers work:
+Yes. Both sync and async work:
 
 ```python
 @checker.register_dependency
 def sync_dependency(task) -> SomeType:
-    return SomeType()  # Sync creation
+    return SomeType()
 
 @checker.register_dependency
 async def async_dependency(task) -> OtherType:
     result = await async_operation()
-    return OtherType(result)  # Async creation
+    return OtherType(result)
 ```
 
 ### What if I need to clean up resources?
@@ -1123,80 +825,36 @@ Use async context managers:
 @checker.register_dependency
 @asynccontextmanager
 async def managed_resource(task):
-    # Setup
     resource = await create_resource()
-
     try:
-        yield resource  # Provide to checker
+        yield resource
     finally:
-        # Cleanup (always runs, even if checker raises exception)
-        await resource.close()
+        await resource.close()  # Cleanup always runs
 ```
 
 ### How do I access the raw task message?
 
-Just declare it as a parameter with the appropriate type:
+Declare it as a parameter:
 
 ```python
 @checker.putflag(0)
-async def putflag_example(task: PutflagCheckerTaskMessage):  # No other dependencies needed
-    print(f"Team: {task.team_name}")
-    print(f"Round: {task.current_round_id}")
-    print(f"Flag: {task.flag}")
-    # ... rest of checker logic
-```
-
-### Can I mix new and old style parameter names?
-
-The parameter name doesn't matter, only the type:
-
-```python
-@checker.putflag(0)
-async def putflag_flexible(
-    task: PutflagCheckerTaskMessage,
-    http: AsyncClient,        # Works (type is AsyncClient)
-    my_db: ChainDB,           # Works (type is ChainDB)
-    foo: AsyncCollection,     # Works (type is AsyncCollection)
-):
-    # All dependencies are correctly injected based on their types
-    ...
+async def putflag_example(task: PutflagCheckerTaskMessage):
+    print(f"Team: {task.team_name}, Round: {task.current_round_id}, Flag: {task.flag}")
 ```
 
 ### Can I inject multiple instances of the same dependency type?
 
-Yes! Each parameter gets its own independent instance, even if they have the same type annotation.
-
-**Example: Multiple HTTP clients**
+Yes. Each parameter gets its own instance:
 
 ```python
 @checker.havoc(0)
-async def havoc_concurrent_requests(
-    task: HavocCheckerTaskMessage,
-    client1: AsyncClient,  # Gets its own instance
-    client2: AsyncClient,  # Gets a different instance
-    client3: AsyncClient   # Gets yet another instance
-) -> None:
-    # All three are separate AsyncClient instances
-    # Useful for concurrent requests without interference
-    results = await asyncio.gather(
-        client1.get("/api/endpoint1"),
-        client2.get("/api/endpoint2"),
-        client3.post("/api/endpoint3", json={"data": "test"})
-    )
+async def havoc_concurrent(task: HavocCheckerTaskMessage, client1: AsyncClient, client2: AsyncClient) -> None:
+    results = await asyncio.gather(client1.get("/api/endpoint1"), client2.get("/api/endpoint2"))
 ```
 
-**Example: Named dependencies for different configurations**
-
-If you want instances with different configurations (not just separate instances of the same config), use named dependencies:
+For different configurations, use named dependencies:
 
 ```python
-from dataclasses import dataclass
-
-@dataclass
-class Session:
-    client: AsyncClient
-    role: str
-
 @checker.register_named_dependency("admin")
 def _get_admin_session(task: CheckerTaskMessage, client: AsyncClient) -> Session:
     return Session(client=client, role="admin")
@@ -1206,19 +864,6 @@ def _get_user_session(task: CheckerTaskMessage, client: AsyncClient) -> Session:
     return Session(client=client, role="user")
 
 @checker.havoc(0)
-async def havoc_test_permissions(
-    task: HavocCheckerTaskMessage,
-    admin_session: Session,  # Uses "admin" injector (name prefix before underscore)
-    user_session: Session     # Uses "user" injector
-) -> None:
-    # admin_session and user_session are different instances
-    # created by different injector functions
-    assert admin_session.role == "admin"
-    assert user_session.role == "user"
+async def havoc_test(task: HavocCheckerTaskMessage, admin_session: Session, user_session: Session) -> None:
+    # do something...
 ```
-
-**Key points:**
-- Each parameter always gets its own instance, even with the same type
-- Parameter names don't affect this (except for named dependency resolution)
-- Named dependencies (prefix before `_`) allow using different injector functions
-- Useful for concurrent operations or testing different user roles/permissions
