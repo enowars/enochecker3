@@ -29,9 +29,13 @@ import uvicorn
 from fastapi import FastAPI
 from motor.core import AgnosticClient, AgnosticCollection, AgnosticDatabase
 from motor.motor_asyncio import AsyncIOMotorClient
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.trace import get_current_span
 
 from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
+from enochecker3.telemetry import SaarctfTracer, instrument_httpx_without_propagation, CommonAttributesLogFilter
+from enochecker3.telemetry_attributes import telemetry_attributes
 
 from .chaindb import ChainDB
 from .types import (
@@ -122,6 +126,7 @@ class Enochecker:
 
         self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
+        self._logger.addFilter(CommonAttributesLogFilter())
 
         handler = logging.StreamHandler(sys.stdout)
         if os.getenv("LOG_FORMAT") == "DEBUG":
@@ -428,9 +433,11 @@ class Enochecker:
         return self.register_named_dependency("")(f)
 
     def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
+        client = httpx.AsyncClient(
             base_url=f"http://{task.address}:{self.service_port}", verify=False
         )
+        instrument_httpx_without_propagation(client)
+        return client
 
     def _get_chaindb(self, task: BaseCheckerTaskMessage) -> ChainDB:
         return ChainDB(self._chain_collection, task.task_chain_id)
@@ -584,66 +591,77 @@ class Enochecker:
 
         @app.post("/", response_model=CheckerResultMessage)
         async def checker(task: CheckerTaskMessage) -> CheckerResultMessage:
-            cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
-            _task = cls(**task.dict())
-            logger = self._get_logger_adapter(_task)
-            logger.debug(f"Received new checker task with payload: {_task}")
-            try:
-                if task.method == CheckerMethod.PUTFLAG:
-                    return await self._call_putflag(
-                        cast(PutflagCheckerTaskMessage, _task)
+            attributes = {
+                "enochecker.method": str(task.method),
+                "enochecker.team_id": task.team_id,
+                "enochecker.variant_id": task.variant_id,
+                "enochecker.related_round_id": task.related_round_id,
+            }
+            with telemetry_attributes(attributes):
+                SaarctfTracer.add_span_attributes(get_current_span())
+
+                cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
+                _task = cls(**task.dict())
+                logger = self._get_logger_adapter(_task)
+                logger.debug(f"Received new checker task with payload: {_task}")
+                try:
+                    if task.method == CheckerMethod.PUTFLAG:
+                        return await self._call_putflag(
+                            cast(PutflagCheckerTaskMessage, _task)
+                        )
+                    elif task.method == CheckerMethod.GETFLAG:
+                        return await self._call_getflag(
+                            cast(GetflagCheckerTaskMessage, _task)
+                        )
+                    elif task.method == CheckerMethod.PUTNOISE:
+                        return await self._call_putnoise(
+                            cast(PutnoiseCheckerTaskMessage, _task)
+                        )
+                    elif task.method == CheckerMethod.GETNOISE:
+                        return await self._call_getnoise(
+                            cast(GetnoiseCheckerTaskMessage, _task)
+                        )
+                    elif task.method == CheckerMethod.HAVOC:
+                        return await self._call_havoc(cast(HavocCheckerTaskMessage, _task))
+                    elif task.method == CheckerMethod.EXPLOIT:
+                        return await self._call_exploit(
+                            cast(ExploitCheckerTaskMessage, _task)
+                        )
+                    elif task.method == CheckerMethod.TEST:
+                        return await self._call_test(cast(TestCheckerTaskMessage, _task))
+                    else:
+                        return CheckerResultMessage(  # type: ignore
+                            result=CheckerTaskResult.INTERNAL_ERROR,
+                            message=f"Unsupported method: {task.method}",
+                        )
+                except MumbleException as e:
+                    trace = traceback.format_exc()
+                    if e.log_message:
+                        logger.info(e.log_message)
+                    logger.info(f"Encountered mumble exception:\n{trace}")
+                    return CheckerResultMessage(
+                        result=CheckerTaskResult.MUMBLE, message=e.message
                     )
-                elif task.method == CheckerMethod.GETFLAG:
-                    return await self._call_getflag(
-                        cast(GetflagCheckerTaskMessage, _task)
+                except OfflineException as e:
+                    trace = traceback.format_exc()
+                    if e.log_message:
+                        logger.info(e.log_message)
+                    logger.info(f"Encountered offline exception:\n{trace}")
+                    return CheckerResultMessage(
+                        result=CheckerTaskResult.OFFLINE, message=e.message
                     )
-                elif task.method == CheckerMethod.PUTNOISE:
-                    return await self._call_putnoise(
-                        cast(PutnoiseCheckerTaskMessage, _task)
+                except InternalErrorException as e:
+                    trace = traceback.format_exc()
+                    if e.log_message:
+                        logger.info(e.log_message)
+                    logger.info(f"Encountered internal error exception:\n{trace}")
+                    return CheckerResultMessage(
+                        result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
                     )
-                elif task.method == CheckerMethod.GETNOISE:
-                    return await self._call_getnoise(
-                        cast(GetnoiseCheckerTaskMessage, _task)
-                    )
-                elif task.method == CheckerMethod.HAVOC:
-                    return await self._call_havoc(cast(HavocCheckerTaskMessage, _task))
-                elif task.method == CheckerMethod.EXPLOIT:
-                    return await self._call_exploit(
-                        cast(ExploitCheckerTaskMessage, _task)
-                    )
-                elif task.method == CheckerMethod.TEST:
-                    return await self._call_test(cast(TestCheckerTaskMessage, _task))
-                else:
-                    return CheckerResultMessage(  # type: ignore
-                        result=CheckerTaskResult.INTERNAL_ERROR,
-                        message=f"Unsupported method: {task.method}",
-                    )
-            except MumbleException as e:
-                trace = traceback.format_exc()
-                if e.log_message:
-                    logger.info(e.log_message)
-                logger.info(f"Encountered mumble exception:\n{trace}")
-                return CheckerResultMessage(
-                    result=CheckerTaskResult.MUMBLE, message=e.message
-                )
-            except OfflineException as e:
-                trace = traceback.format_exc()
-                if e.log_message:
-                    logger.info(e.log_message)
-                logger.info(f"Encountered offline exception:\n{trace}")
-                return CheckerResultMessage(
-                    result=CheckerTaskResult.OFFLINE, message=e.message
-                )
-            except InternalErrorException as e:
-                trace = traceback.format_exc()
-                if e.log_message:
-                    logger.info(e.log_message)
-                logger.info(f"Encountered internal error exception:\n{trace}")
-                return CheckerResultMessage(
-                    result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
-                )
 
         app.on_event("startup")(self._init)
+
+        FastAPIInstrumentor().instrument_app(app)
 
         return app
 
