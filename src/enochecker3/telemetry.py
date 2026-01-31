@@ -26,8 +26,10 @@ def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
     processor = BatchLogRecordProcessor(log_exporter)
     provider.add_log_record_processor(processor)
     set_logger_provider(provider)
-    logging.root.addHandler(LoggingHandler(level=logging.INFO, logger_provider=provider))
     logging.root.addFilter(CommonAttributesLogFilter())
+    handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+    handler.addFilter(DropOtelErrorsLogFilter())
+    logging.root.addHandler(handler)
 
 
 def _setup_tracing(resource: Resource, span_exporter: SpanExporter) -> None:
@@ -71,6 +73,13 @@ class CommonAttributesLogFilter(logging.Filter):
         for key, value in OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items():
             setattr(record, key, value)
         return True
+
+
+class DropOtelErrorsLogFilter(logging.Filter):
+    """Drop all otel related errors from the log output, so that we won't have feedback loops."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith("opentelemetry")
 
 
 class SaarctfTracer(Tracer):
