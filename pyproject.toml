@@ -3,7 +3,7 @@ name = "enochecker3"
 version = "0.13.4"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
-	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
+	{ name = "Lucas Druschke", email = "ldruschk@posteo.de" }
 ]
 description = "Library for building EnoEngine-compatible async checkers"
 readme = "README.md"
