@@ -3,17 +3,18 @@ import secrets
 import pymongo
 import pytest
 import pytest_asyncio
-from motor.core import AgnosticClient, AgnosticCollection, AgnosticDatabase
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 
 from enochecker3 import ChainDB
 
 
 @pytest_asyncio.fixture
 async def collection():
-    mongo: AgnosticClient = AsyncIOMotorClient()
-    db: AgnosticDatabase = mongo["enochecker3_tests"]
-    chain_collection: AgnosticCollection = db["chain_db"]
+    mongo: AsyncMongoClient = AsyncMongoClient()
+    db: AsyncDatabase = mongo["enochecker3_tests"]
+    chain_collection: AsyncCollection = db["chain_db"]
 
     await chain_collection.create_index(
         [("task_chain_id", pymongo.ASCENDING), ("key", pymongo.ASCENDING)],
@@ -23,7 +24,7 @@ async def collection():
 
     yield chain_collection
 
-    mongo.close()
+    await mongo.close()
 
 
 @pytest_asyncio.fixture

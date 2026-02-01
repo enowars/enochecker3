@@ -2,27 +2,18 @@ name: Python package
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: arc-runner-dink
+    runs-on: ubuntu-latest
     name: python test and build
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
     - uses: actions/checkout@v2
-
-    - uses: attacking-lab/actions/.github/actions/github-credentials-store@main
-      with:
-        password: ${{ secrets.CI_PAT }}
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2

@@ -13,9 +13,13 @@ with telemetry_attributes({"name": "abc"}):
 
 class OpenTelemetryCommonAttributes:
     def __init__(self, attributes: Mapping[str, Any] | None = None) -> None:
-        self._attributes: dict[str, Any] = dict(attributes.items()) if attributes else {}
+        self._attributes: dict[str, Any] = (
+            dict(attributes.items()) if attributes else {}
+        )
 
-    def create_child(self, new_attributes: dict[str, Any]) -> 'OpenTelemetryCommonAttributes':
+    def create_child(
+        self, new_attributes: dict[str, Any]
+    ) -> "OpenTelemetryCommonAttributes":
         return OpenTelemetryCommonAttributes(self.to_dict() | new_attributes)
 
     def to_dict(self) -> dict[str, Any]:
@@ -23,7 +27,9 @@ class OpenTelemetryCommonAttributes:
 
 
 class OpenTelemetryCommonAttributesContext:
-    _stack: ClassVar[ContextVar[list[OpenTelemetryCommonAttributes]]] = ContextVar("otel_attributes_stack", default=[])
+    _stack: ClassVar[ContextVar[list[OpenTelemetryCommonAttributes]]] = ContextVar(
+        "otel_attributes_stack", default=[]
+    )
 
     def __init__(self, attributes: OpenTelemetryCommonAttributes) -> None:
         self._attributes: OpenTelemetryCommonAttributes = attributes
@@ -36,10 +42,12 @@ class OpenTelemetryCommonAttributesContext:
         else:
             return OpenTelemetryCommonAttributes()
 
-    def __enter__(self) -> 'OpenTelemetryCommonAttributesContext':
+    def __enter__(self) -> "OpenTelemetryCommonAttributesContext":
         stack: list[OpenTelemetryCommonAttributes] = self._stack.get()
         if len(stack):
-            self._stack.set(stack + [stack[-1].create_child(self._attributes.to_dict())])
+            self._stack.set(
+                stack + [stack[-1].create_child(self._attributes.to_dict())]
+            )
         else:
             self._stack.set([self._attributes])
         return self

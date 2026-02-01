@@ -9,7 +9,10 @@ from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs._internal.export import BatchLogRecordProcessor, LogRecordExporter
+from opentelemetry.sdk._logs._internal.export import (
+    BatchLogRecordProcessor,
+    LogRecordExporter,
+)
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider, Span as SdkSpan
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
@@ -33,10 +36,7 @@ def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
 
 
 def _setup_tracing(resource: Resource, span_exporter: SpanExporter) -> None:
-    provider = SaarctfTracerProvider(
-        sampler=ALWAYS_ON,
-        resource=resource
-    )
+    provider = SaarctfTracerProvider(sampler=ALWAYS_ON, resource=resource)
     processor = BatchSpanProcessor(span_exporter)
     provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
@@ -70,7 +70,9 @@ class CommonAttributesLogFilter(logging.Filter):
     """Add common attributes to each log message"""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        for key, value in OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items():
+        for key, value in (
+            OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items()
+        ):
             setattr(record, key, value)
         return True
 
@@ -91,49 +93,81 @@ class SaarctfTracer(Tracer):
     @classmethod
     def add_span_attributes(cls, span: Span) -> Span:
         span = cast(SdkSpan, span)
-        for k, v in OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items():
+        for k, v in (
+            OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items()
+        ):
             if not span.attributes or k not in span.attributes:
                 span.set_attribute(k, v)
         return span
 
-    def start_span(self,
-                   name: str,
-                   context: Optional[Context] = None,
-                   kind: SpanKind = SpanKind.INTERNAL,
-                   attributes: types.Attributes = None,
-                   links: _Links = None,
-                   start_time: Optional[int] = None,
-                   record_exception: bool = True,
-                   set_status_on_exception: bool = True) -> Span:
-        span = self._tracer.start_span(name, context, kind, attributes, links, start_time, record_exception,
-                                       set_status_on_exception)
+    def start_span(
+        self,
+        name: str,
+        context: Optional[Context] = None,
+        kind: SpanKind = SpanKind.INTERNAL,
+        attributes: types.Attributes = None,
+        links: _Links = None,
+        start_time: Optional[int] = None,
+        record_exception: bool = True,
+        set_status_on_exception: bool = True,
+    ) -> Span:
+        span = self._tracer.start_span(
+            name,
+            context,
+            kind,
+            attributes,
+            links,
+            start_time,
+            record_exception,
+            set_status_on_exception,
+        )
         return self.add_span_attributes(span)
 
     @_agnosticcontextmanager
-    def start_as_current_span(self,
-                              name: str,
-                              context: Optional[Context] = None,
-                              kind: SpanKind = SpanKind.INTERNAL,
-                              attributes: types.Attributes = None,
-                              links: _Links = None,
-                              start_time: Optional[int] = None,
-                              record_exception: bool = True,
-                              set_status_on_exception: bool = True,
-                              end_on_exit: bool = True) -> Iterator[Span]:
-        with self._tracer.start_as_current_span(name, context, kind, attributes, links, start_time, record_exception,
-                                                set_status_on_exception,
-                                                end_on_exit) as span:  # type: Span
+    def start_as_current_span(
+        self,
+        name: str,
+        context: Optional[Context] = None,
+        kind: SpanKind = SpanKind.INTERNAL,
+        attributes: types.Attributes = None,
+        links: _Links = None,
+        start_time: Optional[int] = None,
+        record_exception: bool = True,
+        set_status_on_exception: bool = True,
+        end_on_exit: bool = True,
+    ) -> Iterator[Span]:
+        with self._tracer.start_as_current_span(
+            name,
+            context,
+            kind,
+            attributes,
+            links,
+            start_time,
+            record_exception,
+            set_status_on_exception,
+            end_on_exit,
+        ) as span:  # type: Span
             yield self.add_span_attributes(span)
 
 
 class SaarctfTracerProvider(TracerProvider):
     """Wrap tracer providers to add common attributes to spans"""
 
-    def get_tracer(self, instrumenting_module_name: str, instrumenting_library_version: Optional[str] = None,
-                   schema_url: Optional[str] = None,
-                   attributes: Optional[types.Attributes] = None) -> Tracer:
+    def get_tracer(
+        self,
+        instrumenting_module_name: str,
+        instrumenting_library_version: Optional[str] = None,
+        schema_url: Optional[str] = None,
+        attributes: Optional[types.Attributes] = None,
+    ) -> Tracer:
         return SaarctfTracer(
-            super().get_tracer(instrumenting_module_name, instrumenting_library_version, schema_url, attributes))
+            super().get_tracer(
+                instrumenting_module_name,
+                instrumenting_library_version,
+                schema_url,
+                attributes,
+            )
+        )
 
 
 def _nop(*args: Any, **kwargs: Any) -> None:
@@ -146,6 +180,7 @@ def instrument_httpx_without_propagation(client: httpx.AsyncClient) -> None:
     There's no setting so we must nop out the injection.
     """
     from opentelemetry.instrumentation import httpx as httpx_instrumentation
+
     httpx_instrumentation._inject_propagation_headers = _nop
     httpx_instrumentation.inject = _nop
     httpx_instrumentation.HTTPXClientInstrumentor.instrument_client(client)
