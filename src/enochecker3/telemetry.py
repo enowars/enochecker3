@@ -92,6 +92,9 @@ class SaarctfTracer(Tracer):
 
     @classmethod
     def add_span_attributes(cls, span: Span) -> Span:
+        # when tracing is disabled, trying to add attributes fails
+        if not span.is_recording():
+            return
         span = cast(SdkSpan, span)
         for k, v in (
             OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items()

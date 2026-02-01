@@ -1,5 +1,3 @@
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
 from typing import Union
 
 import pytest
@@ -156,8 +154,6 @@ def test_fastapi_app_property(
     @checker.exploit(0)
     async def exploit_test() -> None:
         pass
-
-    trace.set_tracer_provider(TracerProvider())
 
     app = checker.app
     client = TestClient(app)
