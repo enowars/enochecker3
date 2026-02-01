@@ -4,9 +4,9 @@ import logging
 import os
 import sys
 import traceback
-from random import Random
 from contextlib import AsyncExitStack
 from inspect import Parameter, isawaitable, signature
+from random import Random
 from types import TracebackType
 from typing import (
     Any,
@@ -27,15 +27,15 @@ import httpx
 import pymongo
 import uvicorn
 from fastapi import FastAPI
-from motor.core import AgnosticClient, AgnosticCollection, AgnosticDatabase
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase
 
 from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
 
 from .chaindb import ChainDB
 from .types import (
-    BaseCheckerTaskMessage,
     CheckerInfoMessage,
     CheckerMethod,
     CheckerResultMessage,
@@ -82,12 +82,27 @@ class InvalidVariantIdsException(EnocheckerException):
 
 
 class DependencyInjector:
-    def __init__(self, checker: "Enochecker", task: BaseCheckerTaskMessage):
+    """
+    Runtime dependency injector for use within checker methods.
+
+    This allows checker methods to dynamically request dependencies during execution
+    using the `get()` method, rather than declaring them as function parameters.
+    Useful for conditional dependency injection.
+
+    Example:
+        async def my_checker(injector: DependencyInjector):
+            if some_condition:
+                http_client = await injector.get(httpx.AsyncClient)
+    """
+
+    def __init__(self, checker: "Enochecker", task: CheckerTaskMessage):
         self.checker = checker
         self.task = task
+        # AsyncExitStack manages cleanup of async context managers (like sockets, clients)
         self._exit_stack: AsyncExitStack = AsyncExitStack()
 
     async def __aenter__(self) -> "DependencyInjector":
+        """Enter the async context and initialize the exit stack."""
         await self._exit_stack.__aenter__()
         return self
 
@@ -97,20 +112,35 @@ class DependencyInjector:
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> Optional[bool]:
+        """Exit the async context, ensuring all managed resources are cleaned up."""
         return await self._exit_stack.__aexit__(exc_type, exc_value, traceback)
 
     async def get(self, t: type, name: str = "") -> Any:
+        """
+        Dynamically resolve and inject a dependency at runtime.
+
+        Args:
+            t: The type of dependency to inject (e.g., httpx.AsyncClient, ChainDB)
+            name: Optional name prefix for named dependencies (e.g., "custom" for custom_string)
+
+        Returns:
+            The requested dependency instance
+        """
+        # Find the registered injector function for this type
         injector = self.checker.resolve_injector(name, t)
+        # Recursively inject dependencies needed by the injector itself
         args = await self.checker._inject_dependencies(
             self.task, injector, self._exit_stack
         )
+        # Call the injector with its dependencies
         res = injector(*args)
         if isawaitable(res):
             res = await res
 
-        if not hasattr(res, "__enter__") and not hasattr(res, "__aenter__"):
-            return res
-        return await self._exit_stack.enter_async_context(res)
+        # If the result is a context manager, enter it and manage its lifecycle
+        if hasattr(res, "__enter__") or hasattr(res, "__aenter__"):
+            return await self._exit_stack.enter_async_context(res)
+        return res
 
 
 class Enochecker:
@@ -120,6 +150,7 @@ class Enochecker:
 
         self.checker_name: str = service_name + "Checker"
 
+        # Dependency injection registry: Maps (name_prefix, return_type) -> injector_function
         self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
         self._logger: logging.Logger = logging.getLogger(__name__)
 
@@ -137,15 +168,21 @@ class Enochecker:
                 logging.getLogger("uvicorn.access").getEffectiveLevel()
             )
 
-        self.register_dependency(self._get_http_client)
-        self.register_dependency(self._get_chaindb)
-        self.register_dependency(self._get_motor_collection)
-        self.register_dependency(self._get_motor_database)
-        self.register_dependency(self._get_flag_searcher)
-        self.register_dependency(self._get_logger_adapter)
-        self.register_dependency(self._get_async_socket)
-        self.register_dependency(self._get_random)
-        self.register_dependency(self._get_dependency_injector)
+        # Register built-in dependencies that checker methods can use by declaring them
+        # as parameters. For example:
+        #   async def my_putflag(self, http_client: httpx.AsyncClient, db: ChainDB):
+        # Will automatically receive an HTTP client and database instance
+        self.register_dependency(self._get_http_client)  # httpx.AsyncClient
+        self.register_dependency(self._get_chaindb)  # ChainDB
+        self.register_dependency(self._get_motor_collection)  # AsyncCollection
+        self.register_dependency(self._get_motor_database)  # AsyncDatabase
+        self.register_dependency(self._get_flag_searcher)  # FlagSearcher
+        self.register_dependency(self._get_logger_adapter)  # logging.LoggerAdapter
+        self.register_dependency(
+            self._get_async_socket
+        )  # AsyncSocket (context manager)
+        self.register_dependency(self._get_random)  # Random
+        self.register_dependency(self._get_dependency_injector)  # DependencyInjector
 
         self._method_variants: Dict[CheckerMethod, Dict[int, Callable[..., Any]]] = {
             CheckerMethod.PUTFLAG: {},
@@ -175,10 +212,10 @@ class Enochecker:
         else:
             connection_string = f"mongodb://{mongo_host}:{mongo_port}"
 
-        self._mongo: AgnosticClient = AsyncIOMotorClient(connection_string)
-        self._mongodb: AgnosticDatabase = self._mongo[self.checker_name]
+        self._mongo: AsyncMongoClient = AsyncMongoClient(connection_string)
+        self._mongodb: AsyncDatabase = self._mongo[self.checker_name]
 
-        self._chain_collection: AgnosticCollection = self._mongodb["chain_db"]
+        self._chain_collection: AsyncCollection = self._mongodb["chain_db"]
 
         await self._chain_collection.create_index(
             [("task_chain_id", pymongo.ASCENDING), ("key", pymongo.ASCENDING)],
@@ -238,8 +275,30 @@ class Enochecker:
         return self._define_method(CheckerMethod.TEST, *variant_ids)
 
     def resolve_injector(self, name: str, t: type) -> Callable[..., Any]:
+        """
+        Resolve a dependency injector function based on parameter name and type.
+
+        The resolution process:
+        1. Try to find a named dependency: ("custom", httpx.AsyncClient) for parameter "custom_client"
+        2. Fall back to generic dependency: ("", httpx.AsyncClient) for any AsyncClient parameter
+
+        This enables both generic dependencies (e.g., any `http_client: AsyncClient`)
+        and named dependencies (e.g., `custom_client: AsyncClient` specifically registered as "custom").
+
+        Args:
+            name: Parameter name from the function signature (e.g., "custom_client")
+            t: Parameter type annotation (e.g., httpx.AsyncClient)
+
+        Returns:
+            The injector function that creates instances of the requested dependency
+
+        Raises:
+            ValueError: If no registered dependency matches the name/type combination
+        """
+        # Extract name prefix (before first underscore): "custom_client" -> "custom"
         key: Tuple[str, type] = (name.split("_", 1)[0], t)
         if key not in self._dependency_injections:
+            # Try generic (unnamed) dependency with empty string prefix
             generic_key: Tuple[str, type] = ("", t)
             if generic_key not in self._dependency_injections:
                 raise ValueError(
@@ -250,52 +309,95 @@ class Enochecker:
 
     async def _inject_dependencies(
         self,
-        task: BaseCheckerTaskMessage,
+        task: CheckerTaskMessage,
         f: Callable[..., Any],
         stack: AsyncExitStack,
         dependencies: Optional[Set[Callable[..., Any]]] = None,
     ) -> List[Any]:
+        """
+        Recursively inject dependencies for a function based on its parameter type annotations.
+
+        This is the core of the dependency injection system. It:
+        1. Inspects the function signature to find all parameters
+        2. For each parameter, determines if it's a task message or a dependency
+        3. Recursively injects dependencies (dependencies can depend on other dependencies)
+        4. Handles async context managers (like sockets) by entering them and managing cleanup
+        5. Detects circular dependencies to prevent infinite recursion
+
+        Example flow for `async def my_check(task: PutflagTask, client: AsyncClient, db: ChainDB)`:
+        1. `task: PutflagTask` -> directly inject the task message
+        2. `client: AsyncClient` -> resolve _get_http_client, which needs `task` -> inject task -> call injector
+        3. `db: ChainDB` -> resolve _get_chaindb, which needs `task` -> inject task -> call injector
+
+        Args:
+            task: The current checker task being executed
+            f: The function whose dependencies need to be injected
+            stack: AsyncExitStack for managing async context manager lifetimes
+            dependencies: Set of injectors already in the call chain (for cycle detection)
+
+        Returns:
+            List of resolved dependency instances ready to be passed to the function
+
+        Raises:
+            CircularDependencyException: If a circular dependency is detected
+        """
         dependencies = dependencies or set()
 
         sig = signature(f)
+        # Get the specific task message type for this method (e.g., PutflagCheckerTaskMessage)
         task_message_type = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
 
         args: List[Union[AsyncContextManager[Any], Any]] = []
+        # Iterate through each parameter in the function signature
         for v in sig.parameters.values():
+            # Check if this parameter wants the task message itself
             try:
                 subclass = issubclass(task_message_type, v.annotation)
+                if subclass:
+                    # This parameter wants the task message - inject it directly
+                    args.append(task)
+                    continue
             except TypeError:
-                # subscripted generics, e.g. AsyncSocket = Tuple[..., ...], cannot be used in issubclass
-                subclass = False
-            if subclass:
-                args.append(task)
-            else:
-                injector = self.resolve_injector(v.name, v.annotation)
-                if injector in dependencies:
-                    raise CircularDependencyException(
-                        f"Detected circular dependency in {f} with injected type {v.annotation}"
-                    )
-                else:
-                    args_ = await self._inject_dependencies(
-                        task, injector, stack, dependencies.union([injector])
-                    )
-                    arg = injector(*args_)
-                    if isawaitable(arg):
-                        arg = await arg
-                    args.append(arg)
+                # Subscripted generics (e.g., Tuple[...]) can't be used in issubclass
+                pass
 
-        # new_args contains the return values of __(a)enter__, which would be the "x" in "(async) with ... as x:"
+            # This parameter wants a dependency - resolve and inject it
+            injector = self.resolve_injector(v.name, v.annotation)
+
+            # Circular dependency detection: if this injector is already being
+            # resolved higher up in the call stack, we have a circular dependency
+            if injector in dependencies:
+                raise CircularDependencyException(
+                    f"Detected circular dependency in {f} with injected type {v.annotation}"
+                )
+
+            # Recursively inject dependencies for the injector itself
+            # (e.g., _get_async_socket needs a logger, which needs a task)
+            args_ = await self._inject_dependencies(
+                task, injector, stack, dependencies.union([injector])
+            )
+            # Call the injector with its dependencies to get the actual dependency instance
+            arg = injector(*args_)
+            if isawaitable(arg):
+                arg = await arg
+            args.append(arg)
+
+        # Handle (async) context managers: enter them and let the exit stack manage cleanup
+        # This ensures resources like sockets and HTTP clients are properly closed
+        # new_args contains the return values of __aenter__, which is the "x" in "async with ... as x:"
         new_args = []
         for arg in args:
-            if not hasattr(arg, "__enter__") and not hasattr(arg, "__aenter__"):
+            if hasattr(arg, "__enter__") or hasattr(arg, "__aenter__"):
+                # Enter the (async) context manager and let the stack manage its cleanup
+                # note that enter_async_context also works with non-async contexts
+                new_args.append(await stack.enter_async_context(arg))
+            else:
+                # Not a context manager - use as-is
                 new_args.append(arg)
-                continue
-            new_args.append(await stack.enter_async_context(arg))
+
         return new_args
 
-    async def _call_method_raw(
-        self, task: BaseCheckerTaskMessage
-    ) -> Optional[str | bytes]:
+    async def _call_method_raw(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         variant_id = task.variant_id
         method = task.method
         try:
@@ -316,7 +418,7 @@ class Enochecker:
 
         return res
 
-    async def _call_method(self, task: BaseCheckerTaskMessage) -> Optional[str | bytes]:
+    async def _call_method(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         try:
             return await asyncio.wait_for(
                 self._call_method_raw(task),
@@ -359,7 +461,8 @@ class Enochecker:
         self, task: PutflagCheckerTaskMessage
     ) -> CheckerResultMessage:
         attack_info: Optional[str | bytes] = await self._call_method(task)
-        assert isinstance(attack_info, str)
+        if isinstance(attack_info, bytes):
+            attack_info = attack_info.decode()
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
@@ -408,11 +511,48 @@ class Enochecker:
     ########################
 
     def register_named_dependency(self, name: str = "") -> Callable[..., Any]:
+        """
+        Register a named dependency that can be injected into checker methods.
+
+        Named dependencies allow multiple injectors for the same type, differentiated by name.
+        For example, you can have both a generic AsyncClient and a "special_client: AsyncClient"
+        that's configured differently.
+
+        The registration key is formed from:
+        - Name prefix (before first underscore in the name parameter)
+        - Return type annotation of the injector function
+
+        Example:
+            @checker.register_named_dependency("custom")
+            def get_custom_client(task: PutflagTask) -> httpx.AsyncClient:
+                return httpx.AsyncClient(timeout=60.0)
+
+            # Can now be injected as:
+            async def my_checker(custom_client: httpx.AsyncClient):
+                # Will use the custom configured client
+                ...
+
+        Args:
+            name: Name prefix for this dependency (empty string for generic dependencies)
+
+        Returns:
+            Decorator function that registers the dependency
+
+        Raises:
+            AttributeError: If the injector function is missing a return type annotation
+            ValueError: If a dependency with the same name and type is already registered
+        """
+
         def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
             sig = signature(f)
+            # Extract name prefix and use the return type as the dependency type
             key: Tuple[str, type] = (name.split("_", 1)[0], sig.return_annotation)
+
+            # Return type annotation is required so we know what type this injector provides
             if sig.return_annotation == Parameter.empty:
                 raise AttributeError(f"missing return annotation for {f.__name__}")
+
+            # Prevent duplicate registrations
             if key in self._dependency_injections:
                 raise ValueError(
                     f"already registered a dependency with name {key[0]} and type {key[1]}"
@@ -425,29 +565,99 @@ class Enochecker:
         return decorator
 
     def register_dependency(self, f: Callable[..., Any]) -> Callable[..., Any]:
+        """
+        Register a generic (unnamed) dependency that can be injected into checker methods.
+
+        This is a convenience wrapper around register_named_dependency("") for the common
+        case of registering a dependency that doesn't need a specific name.
+
+        Example:
+            @checker.register_dependency
+            def get_http_client(task: BaseCheckerTask) -> httpx.AsyncClient:
+                return httpx.AsyncClient(base_url=f"http://{task.address}")
+
+            # Can now be injected as any parameter named *_client with type AsyncClient:
+            async def my_checker(http_client: httpx.AsyncClient):
+                ...
+
+        Args:
+            f: The injector function (must have a return type annotation)
+
+        Returns:
+            The original function (unchanged)
+        """
         return self.register_named_dependency("")(f)
 
-    def _get_http_client(self, task: BaseCheckerTaskMessage) -> httpx.AsyncClient:
+    # Built-in dependency providers - these are automatically registered and can be
+    # injected into any checker method by declaring them as parameters
+
+    def _get_http_client(self, task: CheckerTaskMessage) -> httpx.AsyncClient:
+        """
+        Provide an HTTP client configured for the service being checked.
+
+        Injectable as: http_client: httpx.AsyncClient
+
+        The client is configured with:
+        - Base URL pointing to the service (task.address:service_port)
+        - SSL verification disabled (for CTF/testing environments)
+        """
         return httpx.AsyncClient(
             base_url=f"http://{task.address}:{self.service_port}", verify=False
         )
 
-    def _get_chaindb(self, task: BaseCheckerTaskMessage) -> ChainDB:
+    def _get_chaindb(self, task: CheckerTaskMessage) -> ChainDB:
+        """
+        Provide a ChainDB instance for persistent storage across checker rounds.
+
+        Injectable as: db: ChainDB
+
+        ChainDB allows storing and retrieving data associated with a specific task chain,
+        useful for storing attack info from putflag that needs to be retrieved in getflag.
+        """
         return ChainDB(self._chain_collection, task.task_chain_id)
 
-    def _get_motor_collection(self, task: BaseCheckerTaskMessage) -> AgnosticCollection:
+    def _get_motor_collection(self, task: CheckerTaskMessage) -> AsyncCollection:
+        """
+        Provide a MongoDB collection scoped to the current team.
+
+        Injectable as: collection: AsyncCollection
+
+        This gives direct access to a team-specific MongoDB collection for custom
+        storage needs beyond what ChainDB provides.
+        """
         return self._mongodb[f"team_{task.team_id}"]
 
-    def _get_motor_database(self, task: BaseCheckerTaskMessage) -> AgnosticDatabase:
+    def _get_motor_database(self, task: CheckerTaskMessage) -> AsyncDatabase:
+        """
+        Provide the MongoDB database instance for this checker.
+
+        Injectable as: database: AsyncDatabase
+
+        This gives direct access to the checker's MongoDB database for advanced use cases.
+        """
         _ = task
         return self._mongodb
 
     def _get_flag_searcher(self, task: ExploitCheckerTaskMessage) -> FlagSearcher:
+        """
+        Provide a FlagSearcher configured for the current exploit task.
+
+        Injectable as: flag_searcher: FlagSearcher (only in exploit methods)
+
+        The searcher uses the task's flag_regex and flag_hash to find and validate flags
+        in the output from exploit attempts.
+        """
         return FlagSearcher(task.flag_regex, task.flag_hash)
 
-    def _get_logger_adapter(
-        self, task: BaseCheckerTaskMessage
-    ) -> logging.LoggerAdapter:
+    def _get_logger_adapter(self, task: CheckerTaskMessage) -> logging.LoggerAdapter:
+        """
+        Provide a logger with task context automatically included.
+
+        Injectable as: logger: logging.LoggerAdapter
+
+        The logger adapter automatically includes service name, checker name, and task
+        details in all log messages for better debugging and monitoring.
+        """
         return logging.LoggerAdapter(
             self._logger,
             extra={
@@ -459,8 +669,22 @@ class Enochecker:
 
     @contextlib.asynccontextmanager
     async def _get_async_socket(
-        self, task: BaseCheckerTaskMessage, logger: logging.LoggerAdapter
+        self, task: CheckerTaskMessage, logger: logging.LoggerAdapter
     ) -> AsyncSocket:
+        """
+        Provide a raw TCP socket connection to the service.
+
+        Injectable as: socket: AsyncSocket (note: this is an async context manager)
+
+        Returns a tuple of (StreamReader, StreamWriter) for low-level protocol interaction.
+        The connection is automatically closed when the checker method completes.
+
+        Example:
+            async def my_checker(socket: AsyncSocket):
+                reader, writer = socket
+                writer.write(b"HELLO\\n")
+                response = await reader.readline()
+        """
         try:
             conn = await asyncio.streams.open_connection(
                 task.address, self.service_port
@@ -472,15 +696,39 @@ class Enochecker:
         try:
             yield conn
         finally:
+            # Ensure the socket is properly closed even if the checker crashes
             conn[1].close()
             await conn[1].wait_closed()
 
-    def _get_random(self, task: BaseCheckerTaskMessage) -> Random:
+    def _get_random(self, task: CheckerTaskMessage) -> Random:
+        """
+        Provide a seeded random number generator for deterministic randomness.
+
+        Injectable as: random: Random
+
+        The RNG is seeded with the task_id, ensuring that the same task always generates
+        the same "random" values. This enables reproducible fuzzing/testing: when a
+        checker fails with specific random inputs, you can use the task_id from logs
+        to reproduce the exact same random sequence for debugging.
+
+        NOTE: Do NOT use this for exploit methods. Players don't have access to the
+        checker's internal random state. Use attack_info (the return value from putflag)
+        to provide targeting information to players instead.
+
+        WARNING: In CTF environments, predictable checker behavior based on task_id can
+        be a security risk if attackers can observe and exploit the patterns.
+        """
         return Random(task.task_id)
 
-    def _get_dependency_injector(
-        self, task: BaseCheckerTaskMessage
-    ) -> DependencyInjector:
+    def _get_dependency_injector(self, task: CheckerTaskMessage) -> DependencyInjector:
+        """
+        Provide a DependencyInjector for runtime dependency resolution.
+
+        Injectable as: injector: DependencyInjector
+
+        This allows checker methods to dynamically request dependencies at runtime
+        rather than declaring them all as parameters. Useful for conditional dependencies.
+        """
         return DependencyInjector(self, task)
 
     #########################
@@ -568,7 +816,14 @@ class Enochecker:
 
     @property
     def app(self) -> FastAPI:
-        app = FastAPI()
+        @contextlib.asynccontextmanager
+        async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+            # Startup: Initialize MongoDB connection
+            await self._init()
+            yield
+            # Shutdown: Could close connections here if needed
+
+        app = FastAPI(lifespan=lifespan)
 
         try:
             service_info = self.get_service_info()
@@ -585,7 +840,7 @@ class Enochecker:
         @app.post("/", response_model=CheckerResultMessage)
         async def checker(task: CheckerTaskMessage) -> CheckerResultMessage:
             cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
-            _task = cls(**task.dict())
+            _task = cls(**task.model_dump())
             logger = self._get_logger_adapter(_task)
             logger.debug(f"Received new checker task with payload: {_task}")
             try:
@@ -642,8 +897,6 @@ class Enochecker:
                 return CheckerResultMessage(
                     result=CheckerTaskResult.INTERNAL_ERROR, message=e.message
                 )
-
-        app.on_event("startup")(self._init)
 
         return app
 

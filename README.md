@@ -4,7 +4,7 @@ A FastAPI based checker library for writing async checkers in python. It is call
 
 ## Quick Start
 
-Getting started is really easy. Simply install `enochecker3` using
+Install `enochecker3` using
 ```
 pip3 install enochecker3
 ```
@@ -72,3 +72,15 @@ uvicorn --reload example:checker.app
 ```
 
 And browse to (http://localhost:8000/docs) to explore the web interface, which allows you to send requests to the checker.
+
+## Built-In Dependencies
+
+See [docs/builtin_dependencies.md](docs/builtin_dependencies.md)
+
+## Adding Custom Dependencies
+
+See [docs/adding_custom_dependencies.md](docs/adding_custom_dependencies.md)
+
+## Good to Know / FAQ
+
+See [docs/faq.md](docs/faq.md)

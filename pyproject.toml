@@ -3,18 +3,18 @@ name = "enochecker3"
 version = "0.13.4"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
-	{ name = "Lucas Drushke", email = "ldruschk@posteo.de" }
+	{ name = "Lucas Druschke", email = "ldruschk@posteo.de" }
 ]
 description = "Library for building EnoEngine-compatible async checkers"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-	"fastapi>=0.115.6,<0.116.0",
+	"fastapi>=0.128.0,<0.129.0",
 	"gunicorn==23.0.0",
 	"httpx>=0.28.0,<0.29.0",
-	"motor>=3.6.1,<4.0.0",
-	"uvicorn>=0.34.0,<0.35.0",
-	"enochecker-core"
+	"pymongo>=4.0.0,<5.0.0",
+	"uvicorn>=0.40.0,<0.41.0",
+	"enochecker-core>=0.13.0,<0.14.0"
 ]
 
 [dependency-groups]
@@ -48,5 +48,3 @@ testpaths = [
 	"tests"
 ]
 
-[tool.uv.sources]
-enochecker-core = { git = "https://github.com/attacking-lab/enochecker-core", rev = "v0.13.0" }
