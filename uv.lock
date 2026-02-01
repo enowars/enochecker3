@@ -184,9 +184,13 @@ wheels = [
 [[package]]
 name = "enochecker-core"
 version = "0.13.0"
-source = { git = "https://github.com/enowars/enochecker_core?rev=make_flag_optional#caf07770b75d3a35d896fed9d2970536b29fe5f7" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9a/b5/3f84bd6ec1af2e9ec309e87f62427d42cf0d0488b4f3961953d960543f9c/enochecker_core-0.13.0.tar.gz", hash = "sha256:03f59c35ca74f413577e0be6d51dfc2137e8939307b54c0106c86df17c2dbc08", size = 3477, upload-time = "2026-02-01T14:55:28.312Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/31/47f6687039fc27d25e6c7d67e37ec0dc60af2273b4f43cc6e5c2e2bdd36e/enochecker_core-0.13.0-py3-none-any.whl", hash = "sha256:ec70051af53f6bdd44b6aacd387798effa4b42275a87f545a7723f25fdec9f5f", size = 3126, upload-time = "2026-02-01T14:55:27.553Z" },
 ]
 
 [[package]]
@@ -213,7 +217,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "enochecker-core", git = "https://github.com/enowars/enochecker_core?rev=make_flag_optional" },
+    { name = "enochecker-core", specifier = ">=0.13.0,<0.14.0" },
     { name = "fastapi", specifier = ">=0.128.0,<0.129.0" },
     { name = "gunicorn", specifier = "==23.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<0.29.0" },
