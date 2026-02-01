@@ -161,14 +161,14 @@ class Enochecker:
 
         # Dependency injection registry: Maps (name_prefix, return_type) -> injector_function
         self._dependency_injections: Dict[Tuple[str, type], Callable[..., Any]] = {}
-        self._logger: logging.Logger = logging.getLogger(__name__)
+        self._logger: logging.Logger = logging.getLogger()
         self._logger.addFilter(CommonAttributesLogFilter())
 
         handler = logging.StreamHandler(sys.stdout)
-        if os.getenv("LOG_FORMAT") == "DEBUG":
-            handler.setFormatter(DebugFormatter("%(message)s"))
-        else:
-            handler.setFormatter(ELKFormatter("%(message)s"))
+        #if os.getenv("LOG_FORMAT") == "DEBUG":
+        #    handler.setFormatter(DebugFormatter("%(message)s"))
+        #else:
+        #    handler.setFormatter(ELKFormatter("%(message)s"))
 
         self._logger.addHandler(handler)
         self._logger.setLevel(logging.DEBUG)
@@ -834,14 +834,7 @@ class Enochecker:
 
     @property
     def app(self) -> FastAPI:
-        @contextlib.asynccontextmanager
-        async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-            # Startup: Initialize MongoDB connection
-            await self._init()
-            yield
-            # Shutdown: Could close connections here if needed
-
-        app = FastAPI(lifespan=lifespan)
+        app = FastAPI(lifespan=self._lifespan)
 
         try:
             service_info = self.get_service_info()
