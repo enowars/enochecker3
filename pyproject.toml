@@ -17,6 +17,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.39.1",
     "opentelemetry-instrumentation-fastapi>=0.60b1",
 	"opentelemetry-instrumentation-httpx>=0.60b1",
+	"opentelemetry-instrumentation-pymongo>=0.60b1",
     "opentelemetry-sdk>=1.39.1",
 	"uvicorn>=0.40.0,<0.41.0",
 	"enochecker-core>=0.13.0,<0.14.0"

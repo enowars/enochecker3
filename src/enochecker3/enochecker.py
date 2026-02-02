@@ -28,12 +28,12 @@ import pymongo
 import uvicorn
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
 from opentelemetry.trace import get_current_span
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 
-from enochecker3.logging import DebugFormatter, ELKFormatter
 from enochecker3.utils import FlagSearcher
 from enochecker3.telemetry import (
     SaarctfTracer,
@@ -165,9 +165,9 @@ class Enochecker:
         self._logger.addFilter(CommonAttributesLogFilter())
 
         handler = logging.StreamHandler(sys.stdout)
-        #if os.getenv("LOG_FORMAT") == "DEBUG":
+        # if os.getenv("LOG_FORMAT") == "DEBUG":
         #    handler.setFormatter(DebugFormatter("%(message)s"))
-        #else:
+        # else:
         #    handler.setFormatter(ELKFormatter("%(message)s"))
 
         self._logger.addHandler(handler)
@@ -222,6 +222,7 @@ class Enochecker:
         else:
             connection_string = f"mongodb://{mongo_host}:{mongo_port}"
 
+        PymongoInstrumentor().instrument()
         self._mongo: AsyncMongoClient = AsyncMongoClient(connection_string)
         self._mongodb: AsyncDatabase = self._mongo[self.checker_name]
 
