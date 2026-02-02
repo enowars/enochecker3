@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, Iterator, cast, Any
+from typing import Any, Iterator, Optional, cast
 
 import httpx
 from opentelemetry import trace
@@ -14,10 +14,11 @@ from opentelemetry.sdk._logs._internal.export import (
     LogRecordExporter,
 )
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider, Span as SdkSpan
+from opentelemetry.sdk.trace import Span as SdkSpan
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
-from opentelemetry.trace import Tracer, SpanKind, _Links, Span
+from opentelemetry.trace import Span, SpanKind, Tracer, _Links
 from opentelemetry.util import types
 from opentelemetry.util._decorator import _agnosticcontextmanager
 
@@ -94,7 +95,7 @@ class SaarctfTracer(Tracer):
     def add_span_attributes(cls, span: Span) -> Span:
         # when tracing is disabled, trying to add attributes fails
         if not span.is_recording():
-            return
+            return span
         span = cast(SdkSpan, span)
         for k, v in (
             OpenTelemetryCommonAttributesContext.current_attributes().to_dict().items()
