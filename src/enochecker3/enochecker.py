@@ -29,19 +29,19 @@ import uvicorn
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
-from opentelemetry.trace import get_current_span
+from opentelemetry.trace import StatusCode, get_current_span
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase
 
-from enochecker3.utils import FlagSearcher
 from enochecker3.telemetry import (
+    CommonAttributesLogFilter,
     SaarctfTracer,
     instrument_httpx_without_propagation,
-    CommonAttributesLogFilter,
     setup_telemetry,
 )
 from enochecker3.telemetry_attributes import telemetry_attributes
+from enochecker3.utils import FlagSearcher
 
 from .chaindb import ChainDB
 from .types import (
@@ -171,7 +171,7 @@ class Enochecker:
         #    handler.setFormatter(ELKFormatter("%(message)s"))
 
         self._logger.addHandler(handler)
-        self._logger.setLevel(logging.DEBUG)
+        self._logger.setLevel(logging.INFO)
 
         if __name__ == "uvicorn":
             self._logger.setLevel(
@@ -417,6 +417,8 @@ class Enochecker:
     async def _call_method_raw(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         variant_id = task.variant_id
         method = task.method
+        print(task)
+        print(self._method_variants)
         try:
             f = self._method_variants[method][variant_id]
         except KeyError:
@@ -437,38 +439,50 @@ class Enochecker:
 
     async def _call_method(self, task: CheckerTaskMessage) -> Optional[str | bytes]:
         try:
-            return await asyncio.wait_for(
-                self._call_method_raw(task),
-                timeout=(task.timeout / 1000) - TIMEOUT_BUFFER,
+            timeout = (task.timeout / 1000) - TIMEOUT_BUFFER
+            get_current_span().set_attribute(
+                "enochecker.internal_timeout_ms", timeout * 1000
             )
+            res = await asyncio.wait_for(
+                self._call_method_raw(task),
+                timeout=timeout,
+            )
+            get_current_span().set_attribute("enochecker.status", "OK")
+            return res
         except (MumbleException, OfflineException, InternalErrorException):
             raise
-        except (httpx.ConnectError, httpx.ConnectTimeout):
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"Connection to service failed\n{trace}")
             raise OfflineException("Connection to service failed")
-        except (EOFError, httpx.ReadError, httpx.WriteError):
+        except (EOFError, httpx.ReadError, httpx.WriteError) as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.error(f"Connection to service closed abruptly\n{trace}")
             raise MumbleException("Closed to service closed abruptly")
-        except (TimeoutError, httpx.TimeoutException):
+        except (TimeoutError, httpx.TimeoutException) as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.error(f"Service responding too slow\n{trace}")
             raise MumbleException("Service responding too slow")
-        except (ConnectionResetError, httpx.CloseError):
+        except (ConnectionResetError, httpx.CloseError) as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.error(f"Connection reset by service\n{trace}")
             raise MumbleException("Connection reset by services")
-        except (httpx.RemoteProtocolError, httpx.DecodingError):
+        except (httpx.RemoteProtocolError, httpx.DecodingError) as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"HTTP connection to service failed\n{trace}")
             raise OfflineException("HTTP connection to service failed")
         except Exception as e:
+            get_current_span().record_exception(e)
             trace = traceback.format_exc()
             logger = self._get_logger_adapter(task)
             logger.info(f"Checker internal error\n{trace}")
@@ -480,6 +494,7 @@ class Enochecker:
         attack_info: Optional[str | bytes] = await self._call_method(task)
         if isinstance(attack_info, bytes):
             attack_info = attack_info.decode()
+        get_current_span().set_attribute("enochecker.result.attack_info", attack_info)
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
@@ -851,14 +866,28 @@ class Enochecker:
 
         @app.post("/", response_model=CheckerResultMessage)
         async def checker(task: CheckerTaskMessage) -> CheckerResultMessage:
+            print(task.model_dump_json())
             attributes = {
-                "enochecker.method": str(task.method),
-                "enochecker.team_id": task.team_id,
-                "enochecker.variant_id": task.variant_id,
-                "enochecker.related_round_id": task.related_round_id,
+                "enochecker.task.task_id": task.task_id,
+                "enochecker.task.method": str(task.method),
+                "enochecker.task.address": task.address,
+                "enochecker.task.team_id": task.team_id,
+                "enochecker.task.team_name": task.team_name,
+                "enochecker.task.current_round_id": task.current_round_id,
+                "enochecker.task.related_round_id": task.related_round_id,
+                "enochecker.task.flag": task.flag,
+                "enochecker.task.variant_id": task.variant_id,
+                "enochecker.task.timeout": task.timeout,
+                "enochecker.task.round_length": task.round_length,
+                "enochecker.task.task_chain_id": task.task_chain_id,
+                "enochecker.task.flag_regex": task.flag_regex,
+                "enochecker.task.flag_hash": task.flag_hash,
+                "enochecker.task.attack_info": task.attack_info,
             }
             with telemetry_attributes(attributes):
-                SaarctfTracer.add_span_attributes(get_current_span())
+                span = get_current_span()
+                span.update_name(str(task.method))
+                SaarctfTracer.add_span_attributes(span)
                 cls = METHOD_TO_TASK_MESSAGE_MAPPING[task.method]
                 _task = cls(**task.model_dump())
                 logger = self._get_logger_adapter(_task)
@@ -898,6 +927,9 @@ class Enochecker:
                             message=f"Unsupported method: {task.method}",
                         )
                 except MumbleException as e:
+                    span.record_exception(e)
+                    span.set_attribute("enochecker.result", "MUMBLE")
+                    span.set_attribute("enochecker.result.message", e.message)
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)
@@ -906,6 +938,9 @@ class Enochecker:
                         result=CheckerTaskResult.MUMBLE, message=e.message
                     )
                 except OfflineException as e:
+                    span.record_exception(e)
+                    span.set_attribute("enochecker.result", "OFFLINE")
+                    span.set_attribute("enochecker.result.message", e.message)
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)
@@ -914,6 +949,10 @@ class Enochecker:
                         result=CheckerTaskResult.OFFLINE, message=e.message
                     )
                 except InternalErrorException as e:
+                    span.record_exception(e)
+                    span.set_status(StatusCode.ERROR)
+                    span.set_attribute("enochecker.result", "INTERNAL_ERROR")
+                    span.set_attribute("enochecker.result.message", e.message)
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)

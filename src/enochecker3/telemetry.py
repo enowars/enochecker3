@@ -8,6 +8,7 @@ from opentelemetry._logs import set_logger_provider
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.httpx import RequestInfo, ResponseInfo
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs._internal.export import (
     BatchLogRecordProcessor,
@@ -178,6 +179,29 @@ def _nop(*args: Any, **kwargs: Any) -> None:
     pass
 
 
+async def async_request_hook(span: Span, request: RequestInfo):
+    print(type(span))
+    print(type(request))
+    span.update_name(f"{request.method.decode()} {request.url}")
+    for k, v in request.headers.items():
+        span.set_attribute(f"http.headers.{k}", v)
+    print(request.method)
+    print(request.url)
+    print(request.headers)
+    print(request.stream)
+    print(request.extensions)
+
+
+async def async_response_hook(
+    span: Span,
+    request: RequestInfo,
+    response: ResponseInfo,
+):
+    print(type(span))
+    print(type(request))
+    print(type(response))
+
+
 def instrument_httpx_without_propagation(client: httpx.AsyncClient) -> None:
     """
     We do not want to transport traceparent headers towards services (fingerprinting etc).
@@ -186,5 +210,11 @@ def instrument_httpx_without_propagation(client: httpx.AsyncClient) -> None:
     from opentelemetry.instrumentation import httpx as httpx_instrumentation
 
     httpx_instrumentation._inject_propagation_headers = _nop
-    httpx_instrumentation.inject = _nop
-    httpx_instrumentation.HTTPXClientInstrumentor.instrument_client(client)
+    # httpx_instrumentation.inject = _nop
+    httpx_instrumentation.HTTPXClientInstrumentor.instrument_client(
+        client,
+        request_hook=async_request_hook,
+        response_hook=async_response_hook,
+        # async_request_hook=async_request_hook,
+        # async_response_hook=async_response_hook,
+    )
