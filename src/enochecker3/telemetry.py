@@ -13,11 +13,16 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs._internal.export import (
     BatchLogRecordProcessor,
     LogRecordExporter,
+    SimpleLogRecordProcessor,
 )
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import Span as SdkSpan
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    SimpleSpanProcessor,
+    SpanExporter,
+)
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from opentelemetry.trace import Span, SpanKind, Tracer, _Links
 from opentelemetry.util import types
@@ -28,7 +33,10 @@ from enochecker3.telemetry_attributes import OpenTelemetryCommonAttributesContex
 
 def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
     provider = LoggerProvider(resource=resource)
-    processor = BatchLogRecordProcessor(log_exporter)
+    if os.environ.get("OTEL_EXPORTER_DISABLE_BATCH", default=False):
+        processor = SimpleLogRecordProcessor(log_exporter)
+    else:
+        processor = BatchLogRecordProcessor(log_exporter)
     provider.add_log_record_processor(processor)
     set_logger_provider(provider)
     logging.root.addFilter(CommonAttributesLogFilter())
@@ -39,7 +47,10 @@ def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
 
 def _setup_tracing(resource: Resource, span_exporter: SpanExporter) -> None:
     provider = SaarctfTracerProvider(sampler=ALWAYS_ON, resource=resource)
-    processor = BatchSpanProcessor(span_exporter)
+    if os.environ.get("OTEL_EXPORTER_DISABLE_BATCH", default=False):
+        processor = SimpleSpanProcessor(span_exporter)
+    else:
+        processor = BatchSpanProcessor(span_exporter)
     provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
 
