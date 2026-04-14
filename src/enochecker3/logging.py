@@ -10,7 +10,10 @@ LOGGING_PREFIX = "##ENOLOGMESSAGE "
 class DebugFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if type(record.args) is tuple and len(record.args) > 0:
-            record.msg = record.msg % record.args
+            try:
+                record.msg = record.msg % record.args
+            except TypeError:
+                pass
 
         checker_task: Optional[CheckerTaskMessage] = getattr(
             record, "checker_task", None
@@ -25,7 +28,7 @@ class DebugFormatter(logging.Formatter):
         info_line: str = "{} {} {} {}".format(timestamp, levelname, method, task_id)
 
         log_lines: List[str] = [info_line]
-        for i, line in enumerate(record.msg.strip().split("\n")):
+        for i, line in enumerate(str(record.msg).strip().split("\n")):
             log_lines.append("    | " + line)
 
         return "\n".join(log_lines)
@@ -34,7 +37,10 @@ class DebugFormatter(logging.Formatter):
 class ELKFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if type(record.args) is tuple and len(record.args) > 0:
-            record.msg = record.msg % record.args
+            try:
+                record.msg = record.msg % record.args
+            except TypeError:
+                pass
 
         msg: EnoLogMessage = self.create_message(record)
         message_size: int = len(msg.message.encode())
@@ -63,7 +69,7 @@ class ELKFormatter(logging.Formatter):
             record, "checker_task", None
         )
         service_name: Optional[str] = getattr(record, "service_name", None)
-        checker_name: str = getattr(record, "checker_name")
+        checker_name: str = str(getattr(record, "checker_name", ""))
         return EnoLogMessage(
             tool=checker_name,
             type="infrastructure",
@@ -72,7 +78,7 @@ class ELKFormatter(logging.Formatter):
             timestamp=datetime.datetime.now(datetime.timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"
             ),
-            message=record.msg,
+            message=str(record.msg),
             module=record.module,
             function=record.funcName,
             service_name=service_name,

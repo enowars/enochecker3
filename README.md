@@ -73,6 +73,12 @@ uvicorn --reload example:checker.app
 
 And browse to (http://localhost:8000/docs) to explore the web interface, which allows you to send requests to the checker.
 
+
+## Telemetry
+The checker supports OpenTelemetry, with this configuration:
+- Set the environment variable `OTEL_EXPORTER_OTLP_ENDPOINT` to the URL of your OpenTelemetry collector.
+- Set the environment variable `OTEL_EXPORTER_OTLP_HEADERS_AUTHORIZATION` to your authentication token.
+
 ## Built-In Dependencies
 
 See [docs/builtin_dependencies.md](docs/builtin_dependencies.md)

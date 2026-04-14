@@ -1,6 +1,6 @@
 [project]
 name = "enochecker3"
-version = "0.13.4"
+version = "0.14.0-dev"
 authors = [
 	{ name = "Louis Burda", email = "dev@sinitax.com" },
 	{ name = "Lucas Druschke", email = "ldruschk@posteo.de" }
@@ -10,9 +10,15 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
 	"fastapi>=0.128.0,<0.129.0",
-	"gunicorn==23.0.0",
+	"gunicorn==24.1.1",
 	"httpx>=0.28.0,<0.29.0",
 	"pymongo>=4.0.0,<5.0.0",
+	"opentelemetry-api>=1.39.1",
+    "opentelemetry-exporter-otlp>=1.39.1",
+    "opentelemetry-instrumentation-fastapi>=0.60b1",
+	"opentelemetry-instrumentation-httpx>=0.60b1",
+	"opentelemetry-instrumentation-pymongo>=0.60b1",
+    "opentelemetry-sdk>=1.39.1",
 	"uvicorn>=0.40.0,<0.41.0",
 	"enochecker-core>=0.13.0,<0.14.0"
 ]
