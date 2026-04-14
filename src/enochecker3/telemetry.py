@@ -13,6 +13,7 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs._internal.export import (
     BatchLogRecordProcessor,
     LogRecordExporter,
+    LogRecordProcessor,
     SimpleLogRecordProcessor,
 )
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -22,6 +23,7 @@ from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
     SimpleSpanProcessor,
     SpanExporter,
+    SpanProcessor,
 )
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from opentelemetry.trace import Span, SpanKind, Tracer, _Links
@@ -34,7 +36,7 @@ from enochecker3.telemetry_attributes import OpenTelemetryCommonAttributesContex
 def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
     provider = LoggerProvider(resource=resource)
     if os.environ.get("OTEL_EXPORTER_DISABLE_BATCH", default=False):
-        processor = SimpleLogRecordProcessor(log_exporter)
+        processor: LogRecordProcessor = SimpleLogRecordProcessor(log_exporter)
     else:
         processor = BatchLogRecordProcessor(log_exporter)
     provider.add_log_record_processor(processor)
@@ -48,7 +50,7 @@ def _setup_logging(resource: Resource, log_exporter: LogRecordExporter) -> None:
 def _setup_tracing(resource: Resource, span_exporter: SpanExporter) -> None:
     provider = SaarctfTracerProvider(sampler=ALWAYS_ON, resource=resource)
     if os.environ.get("OTEL_EXPORTER_DISABLE_BATCH", default=False):
-        processor = SimpleSpanProcessor(span_exporter)
+        processor: SpanProcessor = SimpleSpanProcessor(span_exporter)
     else:
         processor = BatchSpanProcessor(span_exporter)
     provider.add_span_processor(processor)
@@ -194,8 +196,9 @@ async def async_request_hook(span: Span, request: RequestInfo):
     print(type(span))
     print(type(request))
     span.update_name(f"{request.method.decode()} {request.url}")
-    for k, v in request.headers.items():
-        span.set_attribute(f"http.headers.{k}", v)
+    if request.headers:
+        for k, v in request.headers.items():
+            span.set_attribute(f"http.headers.{k}", v)
     print(request.method)
     print(request.url)
     print(request.headers)

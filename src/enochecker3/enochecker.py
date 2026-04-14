@@ -494,7 +494,9 @@ class Enochecker:
         attack_info: Optional[str | bytes] = await self._call_method(task)
         if isinstance(attack_info, bytes):
             attack_info = attack_info.decode()
-        get_current_span().set_attribute("enochecker.result.attack_info", attack_info)
+        get_current_span().set_attribute(
+            "enochecker.result.attack_info", attack_info if attack_info else "None"
+        )
         return CheckerResultMessage(
             result=CheckerTaskResult.OK, attack_info=attack_info
         )
@@ -929,7 +931,9 @@ class Enochecker:
                 except MumbleException as e:
                     span.record_exception(e)
                     span.set_attribute("enochecker.result", "MUMBLE")
-                    span.set_attribute("enochecker.result.message", e.message)
+                    span.set_attribute(
+                        "enochecker.result.message", e.message if e.message else "None"
+                    )
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)
@@ -940,7 +944,9 @@ class Enochecker:
                 except OfflineException as e:
                     span.record_exception(e)
                     span.set_attribute("enochecker.result", "OFFLINE")
-                    span.set_attribute("enochecker.result.message", e.message)
+                    span.set_attribute(
+                        "enochecker.result.message", e.message if e.message else "None"
+                    )
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)
@@ -952,7 +958,9 @@ class Enochecker:
                     span.record_exception(e)
                     span.set_status(StatusCode.ERROR)
                     span.set_attribute("enochecker.result", "INTERNAL_ERROR")
-                    span.set_attribute("enochecker.result.message", e.message)
+                    span.set_attribute(
+                        "enochecker.result.message", e.message if e.message else "None"
+                    )
                     trace = traceback.format_exc()
                     if e.log_message:
                         logger.info(e.log_message)
