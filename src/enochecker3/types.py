@@ -1,4 +1,5 @@
 __all__ = [
+    "BaseCheckerTaskMessage",
     "CheckerMethod",
     "CheckerTaskMessage",
     "CheckerInfoMessage",
@@ -17,6 +18,8 @@ from enochecker_core import (
     CheckerTaskResult,
     EnoLogMessage,
 )
+
+BaseCheckerTaskMessage = CheckerTaskMessage
 
 
 class PutflagCheckerTaskMessage(CheckerTaskMessage):

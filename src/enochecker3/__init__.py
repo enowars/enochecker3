@@ -8,6 +8,7 @@ from .enochecker import (
     InvalidVariantIdsException,
 )
 from .types import (
+    BaseCheckerTaskMessage,
     CheckerTaskMessage,
     ExploitCheckerTaskMessage,
     GetflagCheckerTaskMessage,
@@ -30,6 +31,7 @@ __all__ = [
     "Enochecker",
     "EnocheckerException",
     "InvalidVariantIdsException",
+    "BaseCheckerTaskMessage",
     "CheckerTaskMessage",
     "ExploitCheckerTaskMessage",
     "GetflagCheckerTaskMessage",
