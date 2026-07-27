@@ -193,17 +193,10 @@ def _nop(*args: Any, **kwargs: Any) -> None:
 
 
 async def async_request_hook(span: Span, request: RequestInfo):
-    print(type(span))
-    print(type(request))
     span.update_name(f"{request.method.decode()} {request.url}")
     if request.headers:
         for k, v in request.headers.items():
             span.set_attribute(f"http.headers.{k}", v)
-    print(request.method)
-    print(request.url)
-    print(request.headers)
-    print(request.stream)
-    print(request.extensions)
 
 
 async def async_response_hook(
@@ -211,9 +204,7 @@ async def async_response_hook(
     request: RequestInfo,
     response: ResponseInfo,
 ):
-    print(type(span))
-    print(type(request))
-    print(type(response))
+    pass
 
 
 def instrument_httpx_without_propagation(client: httpx.AsyncClient) -> None:
